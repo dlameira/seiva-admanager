@@ -51,10 +51,11 @@ export const FORMATS = {
 }
 
 export const BOOKING_STATUS = {
-  rascunho: { label: 'Rascunho', color: '#94a3b8', bg: '#f1f5f9' },
-  pendente: { label: 'Pendente', color: '#b45309', bg: '#fef3c7' },
-  aprovado: { label: 'Aprovado', color: '#15803d', bg: '#dcfce7' },
-  rejeitado: { label: 'Rejeitado', color: '#b91c1c', bg: '#fee2e2' },
+  rascunho:  { label: 'Rascunho',               color: '#94a3b8', bg: '#f1f5f9' },
+  pendente:  { label: 'Submetido pelo cliente',  color: '#b45309', bg: '#fef3c7' },
+  aprovado:  { label: 'Aprovado pela Seiva',     color: '#15803d', bg: '#dcfce7' },
+  veiculado: { label: 'Veiculado',               color: '#1a6090', bg: '#ddeef8' },
+  rejeitado: { label: 'Rejeitado',               color: '#b91c1c', bg: '#fee2e2' },
 }
 
 export function isDayBlocked(dateStr, adminBlockedDates = []) {
