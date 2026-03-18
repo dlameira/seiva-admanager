@@ -1037,6 +1037,11 @@ function renderDashboard() {
             <div class="dash-action-name">Ver calendário</div>
             <div class="dash-action-desc">Visualize todos os slots disponíveis e ocupados</div>
           </button>
+          <div class="dash-action-card dash-action-wip">
+            <div class="dash-action-icon">📊</div>
+            <div class="dash-action-name">Análise de resultados</div>
+            <div class="dash-action-desc">Em desenvolvimento</div>
+          </div>
         </div>
       </div>
     </div>

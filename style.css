@@ -1000,6 +1000,8 @@ tr:hover td { background: #fafaf8; }
 .dash-action-icon { font-size: 1.5rem; line-height: 1; margin-bottom: .25rem; }
 .dash-action-name { font-size: .95rem; font-weight: 700; color: var(--text); }
 .dash-action-desc { font-size: .8rem; color: var(--text-muted); line-height: 1.4; }
+.dash-action-wip { cursor: default; opacity: .5; }
+.dash-action-wip:hover { border-color: var(--border); box-shadow: none; transform: none; }
 
 .sh-date-picker { width: 130px; }
 
