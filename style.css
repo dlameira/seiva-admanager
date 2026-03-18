@@ -1433,6 +1433,7 @@ tr:hover td { background: #fafaf8; }
   border-radius: var(--radius-sm);
   font-size: .85rem;
   line-height: 1;
+  transition: background .15s ease, color .15s ease, transform .12s ease, box-shadow .15s ease;
 }
 .pkdp-empty   { background: none; }
 .pkdp-available {
@@ -1440,8 +1441,20 @@ tr:hover td { background: #fafaf8; }
   background: var(--surface-hover);
   color: var(--text);
 }
-.pkdp-available:hover { background: var(--primary); color: #ffffff; }
-.pkdp-selected { background: var(--primary) !important; color: #ffffff !important; font-weight: 700; }
+.pkdp-available:hover {
+  background: var(--primary);
+  color: #ffffff;
+  transform: scale(1.12);
+  box-shadow: 0 2px 8px rgba(56,168,50,.35);
+  z-index: 1;
+  position: relative;
+}
+.pkdp-selected {
+  background: var(--primary) !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(56,168,50,.4);
+}
 .pkdp-occupied {
   background: var(--red-light);
   color: var(--red);
