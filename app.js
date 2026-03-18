@@ -649,12 +649,7 @@ document.getElementById('view-toggle').addEventListener('click', e => {
   if (!btn) return
   const view = btn.dataset.view
   if (view === currentView) return
-  currentView = view
-  document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view))
-  document.getElementById('nl-filter').style.display = view === 'calendar' ? '' : 'none'
-  document.getElementById('calendar-view').style.display = view === 'calendar' ? '' : 'none'
-  document.getElementById('list-view').style.display = view === 'list' ? '' : 'none'
-  if (view === 'list') renderSheet()
+  switchView(view)
 })
 
 document.getElementById('sheet-prev').addEventListener('click', () => {
