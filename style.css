@@ -893,6 +893,44 @@ tr:hover td { background: #fafaf8; }
   margin-bottom: .9rem;
 }
 
+.dash-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .75rem;
+}
+
+.dash-stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+}
+
+.dash-stat-num {
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.02em;
+}
+
+.dash-stat-label {
+  font-size: .72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+}
+
+.dash-stat-adquiridos .dash-stat-num  { color: var(--text-muted); }
+.dash-stat-disponiveis .dash-stat-num { color: var(--primary); }
+.dash-stat-disponiveis { border-color: var(--primary-mid); background: var(--primary-light); }
+.dash-stat-submetidos .dash-stat-num  { color: var(--amber); }
+.dash-stat-veiculados .dash-stat-num  { color: var(--indice); }
+
+/* legado */
 .dash-quota-summary { display: flex; align-items: baseline; gap: .6rem; margin-bottom: 1rem; }
 .dash-quota-big { font-size: 3rem; font-weight: 800; color: var(--primary); line-height: 1; letter-spacing: -.02em; }
 .dash-quota-label { font-size: 1rem; color: var(--text-muted); font-weight: 500; }

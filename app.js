@@ -957,26 +957,11 @@ function renderDashboard() {
   const myQuotas   = allQuotas.filter(q => String(q.client_id) === String(session.clientId))
   const myBookings = allBookings.filter(b => String(b.client_id) === String(session.clientId) && b.status !== 'rejeitado')
   const totalBought    = myQuotas.reduce((s, q) => s + (q.total_slots || 0), 0)
-  const totalUsed      = myBookings.length
-  const totalAvailable = Math.max(0, totalBought - totalUsed)
-
-  // Per-combo breakdown
-  const COMBOS = [
-    { nl: 'aurora', fmt: 'destaque', label: 'Aurora — Destaque' },
-    { nl: 'aurora', fmt: 'corpo',    label: 'Aurora — Corpo do Email' },
-    { nl: 'indice', fmt: 'destaque', label: 'Índice — Destaque' },
-    { nl: 'indice', fmt: 'corpo',    label: 'Índice — Corpo do Email' },
-  ]
-  const comboCards = COMBOS.map(c => {
-    const quota = myQuotas.filter(q =>
-      (q.newsletter === c.nl || q.newsletter === 'ambas') &&
-      (q.format === c.fmt || q.format === 'ambos')
-    )
-    if (!quota.length) return null
-    const total = quota.reduce((s, q) => s + (q.total_slots || 0), 0)
-    const avail = Math.max(0, total - totalUsed)
-    return { ...c, total, avail }
-  }).filter(Boolean)
+  const countSubmetidos = myBookings.filter(b => b.status === 'pendente').length
+  const countAprovados  = myBookings.filter(b => b.status === 'aprovado').length
+  const countVeiculados = myBookings.filter(b => b.status === 'veiculado').length
+  const totalUsed       = myBookings.length
+  const totalAvailable  = Math.max(0, totalBought - totalUsed)
 
   // Upcoming bookings (sorted, from today)
   const today = toISODate(new Date())
@@ -996,21 +981,27 @@ function renderDashboard() {
       </div>
 
       <div class="dash-section" style="animation-delay:.1s">
-        <div class="dash-section-title">Seus spots disponíveis</div>
         ${totalBought === 0
-          ? `<p class="dash-empty">Nenhuma cota configurada. Entre em contato com a Seiva.</p>`
-          : `<div class="dash-quota-summary">
-              <span class="dash-quota-big">${totalAvailable}</span>
-              <span class="dash-quota-label">de ${totalBought} spot${totalBought !== 1 ? 's' : ''} restante${totalAvailable !== 1 ? 's' : ''}</span>
-            </div>
-            ${comboCards.length > 1 ? `<div class="dash-cards">
-              ${comboCards.map((c, i) => `
-                <div class="dash-card dash-card-${c.nl}" style="animation-delay:${.15 + i*.07}s">
-                  <div class="dash-card-label">${c.label}</div>
-                  <div class="dash-card-number">${c.avail}</div>
-                  <div class="dash-card-sub">de ${c.total}</div>
-                </div>`).join('')}
-            </div>` : ''}`
+          ? `<div class="dash-section-title">Seu pacote</div>
+             <p class="dash-empty">Nenhuma cota configurada. Entre em contato com a Seiva.</p>`
+          : `<div class="dash-stats-grid">
+              <div class="dash-stat dash-stat-adquiridos">
+                <div class="dash-stat-num">${totalBought}</div>
+                <div class="dash-stat-label">Adquiridos</div>
+              </div>
+              <div class="dash-stat dash-stat-disponiveis">
+                <div class="dash-stat-num">${totalAvailable}</div>
+                <div class="dash-stat-label">Disponíveis</div>
+              </div>
+              <div class="dash-stat dash-stat-submetidos">
+                <div class="dash-stat-num">${countSubmetidos}</div>
+                <div class="dash-stat-label">Submetidos</div>
+              </div>
+              <div class="dash-stat dash-stat-veiculados">
+                <div class="dash-stat-num">${countVeiculados}</div>
+                <div class="dash-stat-label">Veiculados</div>
+              </div>
+            </div>`
         }
       </div>
 
