@@ -55,103 +55,36 @@
     </div>
   </nav>
 
-  <!-- List View -->
+  <!-- List View (Spreadsheet) -->
   <div id="list-view" style="display:none">
-    <div class="list-view-layout">
-
-      <!-- Form panel -->
-      <div class="lv-form-panel card">
-        <div class="card-header">
-          <h3 id="lv-form-title">Novo Anúncio</h3>
-          <div id="lv-success" class="lv-success-msg" style="display:none">✓ Anúncio salvo!</div>
-        </div>
-        <div class="card-body">
-          <form id="lv-form" novalidate>
-            <div class="form-grid">
-              <div class="form-group">
-                <label class="form-label" for="lv-date">Data <span class="req">*</span></label>
-                <input type="date" class="form-control" id="lv-date" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="lv-newsletter">Newsletter <span class="req">*</span></label>
-                <select class="form-control" id="lv-newsletter" required>
-                  <option value="">Selecione...</option>
-                  <option value="aurora">Aurora</option>
-                  <option value="indice">Índice</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="lv-format">Formato <span class="req">*</span></label>
-                <select class="form-control" id="lv-format" required>
-                  <option value="">Selecione...</option>
-                  <option value="destaque">Destaque</option>
-                  <option value="corpo">Corpo do Email</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="lv-campaign-name">Título da Campanha <span class="req">*</span></label>
-                <input type="text" class="form-control" id="lv-campaign-name" placeholder="Ex: Lançamento Produto X" required />
-              </div>
-              <div class="form-group full">
-                <label class="form-label" for="lv-authorship">Autoria <span class="req">*</span></label>
-                <input type="text" class="form-control" id="lv-authorship" placeholder="Nome da empresa ou autor" required />
-              </div>
-              <div class="form-group full">
-                <label class="form-label" for="lv-suggested-text">Texto sugerido <span class="req">*</span></label>
-                <textarea class="form-control" id="lv-suggested-text" rows="4" placeholder="Texto do anúncio (entre 200 e 500 caracteres)" required></textarea>
-                <div class="char-counter" id="lv-char-counter">0 / 500</div>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="lv-cover-link">Link da capa</label>
-                <input type="url" class="form-control" id="lv-cover-link" placeholder="https://..." />
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="lv-redirect-link">Link de redirecionamento</label>
-                <input type="url" class="form-control" id="lv-redirect-link" placeholder="https://..." />
-              </div>
-              <div class="form-group full">
-                <label class="form-label" for="lv-promotional-period">Período promocional</label>
-                <input type="text" class="form-control" id="lv-promotional-period" placeholder="Ex: 01/06 a 30/06 (opcional)" />
-              </div>
-            </div>
-            <div id="lv-slot-warning" class="alert alert-warn mt" style="display:none"></div>
-            <div id="lv-quota-info" class="alert alert-info mt" style="display:none"></div>
-            <div id="lv-error" class="alert alert-error mt" style="display:none"></div>
-          </form>
-        </div>
-        <div class="card-footer" style="justify-content:space-between">
-          <button class="btn btn-ghost btn-sm" id="lv-btn-reset">Limpar</button>
-          <div style="display:flex;gap:.5rem">
-            <button class="btn btn-secondary" id="lv-btn-save-continue">Salvar e continuar</button>
-            <button class="btn btn-primary" id="lv-btn-save">Salvar</button>
-          </div>
-        </div>
+    <div class="sheet-topbar">
+      <div class="sheet-month-nav">
+        <button class="btn btn-ghost btn-sm" id="sheet-prev">‹</button>
+        <span id="sheet-month-label"></span>
+        <button class="btn btn-ghost btn-sm" id="sheet-next">›</button>
       </div>
-
-      <!-- Bookings table -->
-      <div class="lv-table-panel">
-        <div class="section-header">
-          <h3>Seus anúncios</h3>
-        </div>
-        <div class="table-wrap">
-          <table id="lv-table">
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Newsletter</th>
-                <th>Formato</th>
-                <th>Campanha</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="lv-table-body">
-              <tr><td colspan="6" class="empty-state-desc" style="text-align:center;padding:2rem">Nenhum anúncio ainda.</td></tr>
-            </tbody>
-          </table>
-        </div>
+      <div class="sheet-actions">
+        <span id="sheet-save-count"></span>
+        <button class="btn btn-primary" id="sheet-save-all">Salvar todos</button>
       </div>
-
+    </div>
+    <div class="sheet-wrap">
+      <table id="sheet-table">
+        <thead>
+          <tr>
+            <th class="sh-th-date">Data</th>
+            <th class="sh-th-campaign">Campanha <span class="req">*</span></th>
+            <th class="sh-th-author">Autoria <span class="req">*</span></th>
+            <th class="sh-th-nl">Newsletter <span class="req">*</span></th>
+            <th class="sh-th-fmt">Formato <span class="req">*</span></th>
+            <th class="sh-th-text">Texto (200–500 caracteres) <span class="req">*</span></th>
+            <th class="sh-th-link">Link da capa</th>
+            <th class="sh-th-link">Link de redirecionamento</th>
+            <th class="sh-th-status"></th>
+          </tr>
+        </thead>
+        <tbody id="sheet-body"></tbody>
+      </table>
     </div>
   </div>
 

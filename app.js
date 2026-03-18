@@ -625,8 +625,9 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
   })
 })
 
-// ─── List View ────────────────────────────────────────────────────────────────
+// ─── Sheet View ───────────────────────────────────────────────────────────────
 let currentView = 'calendar'
+let sheetMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
 
 document.getElementById('view-toggle').addEventListener('click', e => {
   const btn = e.target.closest('.view-btn')
@@ -638,199 +639,210 @@ document.getElementById('view-toggle').addEventListener('click', e => {
   document.getElementById('nl-filter').style.display = view === 'calendar' ? '' : 'none'
   document.getElementById('calendar-view').style.display = view === 'calendar' ? '' : 'none'
   document.getElementById('list-view').style.display = view === 'list' ? '' : 'none'
-  if (view === 'list') renderListView()
+  if (view === 'list') renderSheet()
 })
 
-function renderListView() {
-  const ownBookings = isAnunciante
-    ? (window._ownBookings || [])
-    : allBookings
+document.getElementById('sheet-prev').addEventListener('click', () => {
+  sheetMonth = new Date(sheetMonth.getFullYear(), sheetMonth.getMonth() - 1, 1)
+  renderSheet()
+})
+document.getElementById('sheet-next').addEventListener('click', () => {
+  sheetMonth = new Date(sheetMonth.getFullYear(), sheetMonth.getMonth() + 1, 1)
+  renderSheet()
+})
 
-  const sorted = [...ownBookings].sort((a, b) => a.date < b.date ? 1 : -1)
-  const tbody = document.getElementById('lv-table-body')
+function getWorkingDays(year, month) {
+  const days = []
+  const d = new Date(year, month, 1)
+  while (d.getMonth() === month) {
+    const iso = toISODate(d)
+    if (!isDayBlocked(iso, allBlockedDates)) days.push(iso)
+    d.setDate(d.getDate() + 1)
+  }
+  return days
+}
 
-  if (!sorted.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">Nenhum anúncio cadastrado.</td></tr>`
-    return
+function colorNlSel(sel) {
+  const v = sel.value
+  sel.style.background = v === 'aurora' ? '#fce7f3' : v === 'indice' ? '#dcfce7' : ''
+  sel.style.color = v ? 'var(--text)' : 'var(--text-muted)'
+}
+
+function renderSheet() {
+  const year = sheetMonth.getFullYear()
+  const month = sheetMonth.getMonth()
+  const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
+  const label = sheetMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  document.getElementById('sheet-month-label').textContent = label.charAt(0).toUpperCase() + label.slice(1)
+
+  const workingDays = getWorkingDays(year, month)
+  const monthBookings = allBookings.filter(b => b.date?.startsWith(monthStr))
+  const myBookings = isAnunciante
+    ? monthBookings.filter(b => String(b.client_id) === String(session.clientId))
+    : monthBookings
+
+  // Group my bookings by date
+  const dayMap = {}
+  for (const b of myBookings) {
+    if (!dayMap[b.date]) dayMap[b.date] = []
+    dayMap[b.date].push(b)
   }
 
-  tbody.innerHTML = sorted.map(b => {
-    const nl = NEWSLETTERS[b.newsletter] || {}
-    const fmt = FORMATS[b.format] || {}
-    const st = BOOKING_STATUS[b.status] || {}
-    const canDel = isAdmin || (isAnunciante && ['rascunho', 'pendente'].includes(b.status))
-    return `<tr>
-      <td>${formatDate(b.date)}</td>
-      <td><span class="badge badge-${b.newsletter}">${nl.label || b.newsletter}</span></td>
-      <td>${fmt.label || b.format}</td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.campaign_name || '—'}</td>
-      <td><span class="badge badge-${b.status}">${st.label || b.status}</span></td>
-      <td class="td-actions">
-        <button class="btn btn-ghost btn-sm" data-lv-edit="${b.id}">Editar</button>
-        ${canDel ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" data-lv-del="${b.id}">✕</button>` : ''}
-      </td>
+  // Build rows: one per working day (+ extra rows for days with multiple bookings)
+  const rows = []
+  for (const day of workingDays) {
+    const bkgs = dayMap[day] || []
+    if (bkgs.length === 0) {
+      rows.push({ date: day, booking: null })
+    } else {
+      for (const b of bkgs) rows.push({ date: day, booking: b })
+      // Add blank row if the day still has free slots
+      const taken = monthBookings.filter(b => b.date === day && b.status !== 'rejeitado').length
+      if (taken < 4) rows.push({ date: day, booking: null })
+    }
+  }
+
+  const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+  const tbody = document.getElementById('sheet-body')
+  tbody.innerHTML = rows.map(({ date, booking }, idx) => {
+    const d = new Date(date + 'T12:00:00')
+    const dateLabel = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${DAY_NAMES[d.getDay()]}`
+    const nl = booking?.newsletter || ''
+    const fmt = booking?.format || ''
+    const nlBg = nl === 'aurora' ? 'background:#fce7f3' : nl === 'indice' ? 'background:#dcfce7' : ''
+    const statusBadge = booking ? `<span class="badge badge-${booking.status} badge-xs">${BOOKING_STATUS[booking.status]?.label || booking.status}</span>` : ''
+    return `<tr class="sh-row${booking ? ' sh-has-booking' : ''}" data-date="${date}" data-row="${idx}" data-booking-id="${booking?.id || ''}">
+      <td class="sh-date-cell">${dateLabel}${statusBadge ? '<br>' + statusBadge : ''}</td>
+      <td><input class="sh-input" data-field="campaign_name" value="${escHtml(booking?.campaign_name || '')}" placeholder="Título da campanha" /></td>
+      <td><input class="sh-input" data-field="authorship" value="${escHtml(booking?.authorship || '')}" placeholder="Autoria" /></td>
+      <td><select class="sh-select sh-nl-sel" data-field="newsletter" style="${nlBg}">
+        <option value="">—</option>
+        <option value="aurora" ${nl === 'aurora' ? 'selected' : ''}>Aurora</option>
+        <option value="indice" ${nl === 'indice' ? 'selected' : ''}>Índice</option>
+      </select></td>
+      <td><select class="sh-select" data-field="format">
+        <option value="">—</option>
+        <option value="destaque" ${fmt === 'destaque' ? 'selected' : ''}>Destaque</option>
+        <option value="corpo" ${fmt === 'corpo' ? 'selected' : ''}>Corpo</option>
+      </select></td>
+      <td><input class="sh-input sh-text-col" data-field="suggested_text" value="${escHtml(booking?.suggested_text || '')}" placeholder="Texto do anúncio (200–500 caracteres)" /></td>
+      <td><input class="sh-input sh-link-col" data-field="cover_link" value="${escHtml(booking?.cover_link || '')}" placeholder="https://..." /></td>
+      <td><input class="sh-input sh-link-col" data-field="redirect_link" value="${escHtml(booking?.redirect_link || '')}" placeholder="https://..." /></td>
+      <td class="sh-status-cell" id="sh-s-${idx}"></td>
     </tr>`
   }).join('')
 
-  // Edit from list view → opens the calendar modal
-  tbody.querySelectorAll('[data-lv-edit]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const b = allBookings.find(x => String(x.id) === btn.dataset.lvEdit)
-      if (b) openBookingModal(b.date, b)
-    })
+  tbody.querySelectorAll('.sh-nl-sel').forEach(sel => {
+    colorNlSel(sel)
+    sel.addEventListener('change', () => colorNlSel(sel))
   })
 
-  tbody.querySelectorAll('[data-lv-del]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!confirm('Excluir este anúncio?')) return
-      const id = btn.dataset.lvDel
-      try {
-        showLoading(true)
-        await deleteBooking(id)
-        allBookings = allBookings.filter(b => String(b.id) !== id)
-        if (window._ownBookings) window._ownBookings = window._ownBookings.filter(b => String(b.id) !== id)
-        renderListView()
-        refreshCalendar()
-      } catch (e) { alert('Erro: ' + e.message) }
-      finally { showLoading(false) }
-    })
-  })
+  updateSheetCounter()
+  tbody.addEventListener('input', updateSheetCounter)
 }
 
-// List view form logic
-document.getElementById('lv-suggested-text').addEventListener('input', () => {
-  const len = document.getElementById('lv-suggested-text').value.length
-  const el = document.getElementById('lv-char-counter')
-  el.textContent = `${len} / 500`
-  el.className = 'char-counter ' + (len < 200 ? 'warn' : len > 500 ? 'error' : 'ok')
-})
-
-const lvNlSel = document.getElementById('lv-newsletter')
-const lvFmtSel = document.getElementById('lv-format')
-function lvUpdateWarnings() {
-  const dateStr = document.getElementById('lv-date').value
-  const nl = lvNlSel.value
-  const fmt = lvFmtSel.value
-  const warnEl = document.getElementById('lv-slot-warning')
-  const quotaEl = document.getElementById('lv-quota-info')
-
-  if (dateStr && nl && fmt) {
-    if (!isSlotFree(dateStr, nl, fmt, allBookings)) {
-      warnEl.textContent = `⚠ Slot ${NEWSLETTERS[nl]?.label} — ${FORMATS[fmt]?.label} já ocupado neste dia.`
-      warnEl.style.display = 'flex'
-    } else {
-      warnEl.style.display = 'none'
-    }
-  } else {
-    warnEl.style.display = 'none'
-  }
-
-  if (isAnunciante && nl && fmt) {
-    const q = clientHasQuota(session.clientId, nl, fmt, allQuotas, allBookings)
-    quotaEl.textContent = `Sua cota: ${q.used}/${q.total} slots${q.allowed ? '' : ' — COTA ESGOTADA'}`
-    quotaEl.style.display = 'flex'
-    quotaEl.className = `alert mt ${q.allowed ? 'alert-info' : 'alert-error'}`
-  } else {
-    quotaEl.style.display = 'none'
-  }
+function updateSheetCounter() {
+  const rows = document.querySelectorAll('#sheet-body .sh-row')
+  const n = [...rows].filter(r => {
+    const g = f => r.querySelector(`[data-field="${f}"]`)?.value?.trim()
+    return g('campaign_name') && g('newsletter') && g('format') && g('suggested_text')
+  }).length
+  const el = document.getElementById('sheet-save-count')
+  el.textContent = n > 0 ? `${n} linha${n > 1 ? 's' : ''} a salvar` : ''
 }
-lvNlSel.addEventListener('change', lvUpdateWarnings)
-lvFmtSel.addEventListener('change', lvUpdateWarnings)
-document.getElementById('lv-date').addEventListener('change', lvUpdateWarnings)
 
-async function lvSubmit(keepCampaignDetails) {
-  const dateStr = document.getElementById('lv-date').value
-  const nl = lvNlSel.value
-  const fmt = lvFmtSel.value
-  const campaignName = document.getElementById('lv-campaign-name').value.trim()
-  const authorship = document.getElementById('lv-authorship').value.trim()
-  const suggestedText = document.getElementById('lv-suggested-text').value.trim()
-  const promotionalPeriod = document.getElementById('lv-promotional-period').value.trim()
-  const coverLink = document.getElementById('lv-cover-link').value.trim()
-  const redirectLink = document.getElementById('lv-redirect-link').value.trim()
-  const errEl = document.getElementById('lv-error')
-  errEl.style.display = 'none'
+document.getElementById('sheet-save-all').addEventListener('click', async () => {
+  const rows = [...document.querySelectorAll('#sheet-body .sh-row')]
+  const btn = document.getElementById('sheet-save-all')
+  btn.disabled = true
+  btn.textContent = 'Salvando...'
 
-  if (!dateStr) return showErr(errEl, 'Selecione a data.')
-  if (!nl) return showErr(errEl, 'Selecione a newsletter.')
-  if (!fmt) return showErr(errEl, 'Selecione o formato.')
-  if (!campaignName) return showErr(errEl, 'Informe o título da campanha.')
-  if (!authorship) return showErr(errEl, 'Informe a autoria.')
-  if (suggestedText.length < 200) return showErr(errEl, `Texto muito curto (${suggestedText.length} chars). Mínimo 200.`)
-  if (suggestedText.length > 500) return showErr(errEl, `Texto muito longo. Máximo 500 caracteres.`)
-  if (coverLink && !isValidUrl(coverLink)) return showErr(errEl, 'Link da capa inválido.')
-  if (redirectLink && !isValidUrl(redirectLink)) return showErr(errEl, 'Link de redirecionamento inválido.')
-  if (!isSlotFree(dateStr, nl, fmt, allBookings)) return showErr(errEl, 'Este slot já está ocupado neste dia.')
-  if (isAnunciante) {
-    const q = clientHasQuota(session.clientId, nl, fmt, allQuotas, allBookings)
-    if (!q.allowed) return showErr(errEl, 'Cota esgotada para este formato/newsletter.')
-  }
+  let saved = 0, errors = 0
+  // Track bookings added this session to update quota check
+  const tempAdded = []
 
-  const data = {
-    date: dateStr, newsletter: nl, format: fmt,
-    campaign_name: campaignName, authorship,
-    suggested_text: suggestedText,
-    promotional_period: promotionalPeriod || null,
-    cover_link: coverLink || null,
-    redirect_link: redirectLink || null,
-    status: 'pendente',
-  }
-  if (isAnunciante) data.client_id = session.clientId
-  if (canEdit) data.status = 'rascunho'
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    const g = f => row.querySelector(`[data-field="${f}"]`)?.value?.trim() || ''
+    const date = row.dataset.date
+    const bookingId = row.dataset.bookingId
+    const campaign_name = g('campaign_name')
+    const authorship = g('authorship')
+    const newsletter = g('newsletter')
+    const format = g('format')
+    const suggested_text = g('suggested_text')
+    const cover_link = g('cover_link')
+    const redirect_link = g('redirect_link')
+    const statusEl = document.getElementById(`sh-s-${i}`)
 
-  const saveBtn = document.getElementById(keepCampaignDetails ? 'lv-btn-save-continue' : 'lv-btn-save')
-  saveBtn.disabled = true
-  const orig = saveBtn.textContent
-  saveBtn.textContent = 'Salvando...'
+    // Skip fully empty rows
+    if (!campaign_name && !newsletter && !format && !suggested_text) continue
 
-  try {
-    const created = await createBooking(data)
-    if (created) {
-      allBookings.push(created)
+    // Validate
+    const errs = []
+    if (!campaign_name) errs.push('Campanha obrigatória')
+    if (!authorship) errs.push('Autoria obrigatória')
+    if (!newsletter) errs.push('Newsletter obrigatória')
+    if (!format) errs.push('Formato obrigatório')
+    if (suggested_text.length < 200) errs.push(`Texto curto (${suggested_text.length} chars, mínimo 200)`)
+    if (suggested_text.length > 500) errs.push('Texto longo (máximo 500)')
+    if (cover_link && !isValidUrl(cover_link)) errs.push('Link da capa inválido')
+    if (redirect_link && !isValidUrl(redirect_link)) errs.push('Link de redirecionamento inválido')
+    if (!bookingId) {
+      const combined = [...allBookings, ...tempAdded]
+      if (!isSlotFree(date, newsletter, format, combined)) errs.push('Slot já ocupado neste dia')
       if (isAnunciante) {
-        if (!window._ownBookings) window._ownBookings = []
-        window._ownBookings.push(created)
+        const q = clientHasQuota(session.clientId, newsletter, format, allQuotas, combined)
+        if (!q.allowed) errs.push('Cota esgotada')
       }
     }
-    refreshCalendar()
 
-    // Show success flash
-    const successEl = document.getElementById('lv-success')
-    successEl.style.display = 'inline-flex'
-    setTimeout(() => { successEl.style.display = 'none' }, 2500)
-
-    if (keepCampaignDetails) {
-      // Keep campaign details, reset only date/slot fields
-      document.getElementById('lv-date').value = ''
-      lvNlSel.value = ''
-      lvFmtSel.value = ''
-      document.getElementById('lv-slot-warning').style.display = 'none'
-      document.getElementById('lv-quota-info').style.display = 'none'
-    } else {
-      document.getElementById('lv-form').reset()
-      document.getElementById('lv-char-counter').textContent = '0 / 500'
-      document.getElementById('lv-char-counter').className = 'char-counter warn'
-      document.getElementById('lv-slot-warning').style.display = 'none'
-      document.getElementById('lv-quota-info').style.display = 'none'
+    if (errs.length) {
+      statusEl.innerHTML = `<span class="sh-err" title="${errs.join('; ')}">✕ ${errs[0]}</span>`
+      row.classList.add('sh-row-error')
+      errors++
+      continue
     }
 
-    renderListView()
-  } catch (e) {
-    showErr(errEl, e.message || 'Erro ao salvar.')
-  } finally {
-    saveBtn.disabled = false
-    saveBtn.textContent = orig
-  }
-}
+    const data = { date, newsletter, format, campaign_name, authorship, suggested_text,
+      cover_link: cover_link || null, redirect_link: redirect_link || null }
+    if (!bookingId) {
+      data.status = isAnunciante ? 'pendente' : 'rascunho'
+      if (isAnunciante) data.client_id = session.clientId
+    }
 
-document.getElementById('lv-btn-save').addEventListener('click', () => lvSubmit(false))
-document.getElementById('lv-btn-save-continue').addEventListener('click', () => lvSubmit(true))
-document.getElementById('lv-btn-reset').addEventListener('click', () => {
-  document.getElementById('lv-form').reset()
-  document.getElementById('lv-char-counter').textContent = '0 / 500'
-  document.getElementById('lv-slot-warning').style.display = 'none'
-  document.getElementById('lv-quota-info').style.display = 'none'
-  document.getElementById('lv-error').style.display = 'none'
+    try {
+      if (bookingId) {
+        await updateBooking(bookingId, data)
+        const idx = allBookings.findIndex(b => String(b.id) === bookingId)
+        if (idx >= 0) allBookings[idx] = { ...allBookings[idx], ...data }
+      } else {
+        const result = await createBooking(data)
+        if (result) {
+          allBookings.push(result)
+          tempAdded.push(result)
+          row.dataset.bookingId = result.id
+          row.classList.add('sh-has-booking')
+        }
+      }
+      statusEl.innerHTML = `<span class="sh-ok">✓</span>`
+      row.classList.remove('sh-row-error')
+      saved++
+    } catch (e) {
+      statusEl.innerHTML = `<span class="sh-err" title="${escHtml(e.message)}">✕ ${escHtml(e.message)}</span>`
+      row.classList.add('sh-row-error')
+      errors++
+    }
+  }
+
+  btn.disabled = false
+  btn.textContent = 'Salvar todos'
+  if (saved > 0) {
+    refreshCalendar()
+    const el = document.getElementById('sheet-save-count')
+    el.textContent = `✓ ${saved} salvo${saved > 1 ? 's' : ''}${errors > 0 ? ` · ${errors} com erro` : ''}`
+    el.style.color = errors > 0 ? 'var(--red)' : 'var(--green-dark)'
+  }
 })
 
 // ─── Newsletter filter ────────────────────────────────────────────────────────
@@ -845,6 +857,10 @@ document.getElementById('nl-filter').addEventListener('click', e => {
 })
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+}
+
 function isValidUrl(s) {
   try { return /^https?:\/\/./.test(s) } catch { return false }
 }
