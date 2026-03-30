@@ -1121,16 +1121,32 @@ function renderStaffUpcoming() {
 // ─── Package (monthly) view ───────────────────────────────────────────────────
 const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 
-const PKG_SLOTS = [
-  { nl: 'aurora', fmt: 'destaque', label: 'Aurora Destaque', cls: 'pkg-aurora-d' },
-  { nl: 'indice', fmt: 'destaque', label: 'Índice Destaque', cls: 'pkg-indice-d' },
-  { nl: 'aurora', fmt: 'corpo',    label: 'Aurora Corpo',    cls: 'pkg-aurora-c' },
-]
+function getClientPkgSlots() {
+  const SLOT_META = {
+    aurora_destaque: { nl: 'aurora', fmt: 'destaque', label: 'Aurora Destaque', cls: 'pkg-aurora-d' },
+    indice_destaque: { nl: 'indice', fmt: 'destaque', label: 'Índice Destaque',  cls: 'pkg-indice-d' },
+    aurora_corpo:    { nl: 'aurora', fmt: 'corpo',    label: 'Aurora Corpo',    cls: 'pkg-aurora-c' },
+    indice_corpo:    { nl: 'indice', fmt: 'corpo',    label: 'Índice Corpo',    cls: 'pkg-indice-c' },
+  }
+  const ORDER = ['aurora_destaque', 'indice_destaque', 'aurora_corpo', 'indice_corpo']
+  const seen = new Set()
+  for (const q of allQuotas) {
+    const nls  = q.newsletter === 'ambas' ? ['aurora', 'indice'] : [q.newsletter]
+    const fmts = q.format    === 'ambos'  ? ['destaque', 'corpo'] : [q.format]
+    for (const nl of nls) for (const fmt of fmts) seen.add(`${nl}_${fmt}`)
+  }
+  const keys = ORDER.filter(k => seen.has(k))
+  return keys.length
+    ? keys.map(k => SLOT_META[k])
+    : [SLOT_META.aurora_destaque, SLOT_META.indice_destaque, SLOT_META.aurora_corpo]
+}
 
 function renderPackageMonths() {
   const now      = new Date()
   const curYear  = now.getFullYear()
   const curMonth = now.getMonth()
+  const pkgSlots = getClientPkgSlots()
+  const slotsPerMonth = pkgSlots.length * 4
 
   const myBookings = (window._ownBookings || []).filter(b => b.status !== 'rejeitado')
 
@@ -1171,7 +1187,7 @@ function renderPackageMonths() {
     return `<button class="${cardCls}" data-year="${year}" data-month="${month}" data-editable="${isEditable}">
       <div class="pkg-month-name">${MONTH_NAMES[month]}</div>
       <div class="pkg-month-year">${year}</div>
-      <div class="pkg-month-count">${filled > 0 ? `${filled} de 12 preenchidos` : 'Nenhum spot'}</div>
+      <div class="pkg-month-count">${filled > 0 ? `${filled} de ${slotsPerMonth} preenchidos` : 'Nenhum spot'}</div>
       ${statusHtml}
     </button>`
   }).join('')
@@ -1181,7 +1197,7 @@ function renderPackageMonths() {
       <div class="pkg-months-wrap">
         <div class="pkg-months-header">
           <h2>Pacote mensal</h2>
-          <p>Cada mês tem 12 spots: 4 Aurora Destaque · 4 Índice Destaque · 4 Aurora Corpo</p>
+          <p>Cada mês tem ${slotsPerMonth} spots: ${pkgSlots.map(s => `4× ${s.label}`).join(' · ')}</p>
         </div>
         <div class="pkg-months-grid">${cards}</div>
       </div>
@@ -1197,6 +1213,8 @@ function renderPackageMonths() {
 
 function renderPackageForm(year, month) {
   const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
+  const pkgSlots = getClientPkgSlots()
+  const totalRows = pkgSlots.length * 4
 
   // My existing bookings for this month
   const myMonthBkgs = allBookings.filter(b =>
@@ -1207,18 +1225,20 @@ function renderPackageForm(year, month) {
 
   // Group by slot type, sorted by date
   const bySlot = {}
-  for (const slot of PKG_SLOTS) {
+  for (const slot of pkgSlots) {
     const key = `${slot.nl}_${slot.fmt}`
     bySlot[key] = myMonthBkgs
       .filter(b => b.newsletter === slot.nl && b.format === slot.fmt)
       .sort((a, b) => a.date.localeCompare(b.date))
   }
 
-  // Build 12 interleaved rows
-  const slotCounters = { aurora_destaque: 0, indice_destaque: 0, aurora_corpo: 0 }
-  const rowsHtml = Array.from({ length: 12 }, (_, i) => {
-    const slotDef    = PKG_SLOTS[i % 3]
-    const tripletIdx = Math.floor(i / 3)
+  // Build interleaved rows
+  const slotCounters = {}
+  for (const s of pkgSlots) slotCounters[`${s.nl}_${s.fmt}`] = 0
+
+  const rowsHtml = Array.from({ length: totalRows }, (_, i) => {
+    const slotDef    = pkgSlots[i % pkgSlots.length]
+    const weekIdx    = Math.floor(i / pkgSlots.length)
     const key        = `${slotDef.nl}_${slotDef.fmt}`
     const slotNum    = slotCounters[key]++
     const existing   = bySlot[key][slotNum] || null
@@ -1231,15 +1251,16 @@ function renderPackageForm(year, month) {
     const redirVal = existing?.redirect_link  || ''
     const bookId   = existing?.id             || ''
 
-    const isIndiceDest = slotDef.nl === 'indice' && slotDef.fmt === 'destaque'
-    const isTripletStart = i % 3 === 0 && i > 0
-    const statusHtml = existing
+    const isFirstInGroup = i % pkgSlots.length === 0
+    const isWeekStart    = isFirstInGroup && i > 0
+    const statusHtml     = existing
       ? `<span class="badge badge-${existing.status} badge-xs">${BOOKING_STATUS[existing.status]?.label || existing.status}</span>`
       : ''
+    const srcRowIdx = weekIdx * pkgSlots.length
 
-    return `<tr class="pkg-row ${slotDef.cls}${existing ? ' pkg-row-filled' : ''}${isTripletStart ? ' pkg-triplet-start' : ''}"
-        data-row="${i}" data-triplet="${tripletIdx}" data-nl="${slotDef.nl}" data-fmt="${slotDef.fmt}" data-booking-id="${bookId}">
-      <td class="pkg-td-num">${tripletIdx + 1}</td>
+    return `<tr class="pkg-row ${slotDef.cls}${existing ? ' pkg-row-filled' : ''}${isWeekStart ? ' pkg-triplet-start' : ''}"
+        data-row="${i}" data-triplet="${weekIdx}" data-nl="${slotDef.nl}" data-fmt="${slotDef.fmt}" data-booking-id="${bookId}">
+      <td class="pkg-td-num">${weekIdx + 1}</td>
       <td class="pkg-td-slot"><span class="pkg-slot-badge ${slotDef.cls}">${slotDef.label}</span></td>
       <td class="pkg-td-date">
         <input type="hidden" class="pkg-date" value="${dateVal}" />
@@ -1253,7 +1274,7 @@ function renderPackageForm(year, month) {
       <td class="pkg-td-link"><input class="sh-input" data-field="cover_link" value="${escHtml(capaVal)}" placeholder="https://..." /></td>
       <td class="pkg-td-link"><input class="sh-input" data-field="redirect_link" value="${escHtml(redirVal)}" placeholder="https://..." /></td>
       <td class="pkg-td-act">
-        ${isIndiceDest ? `<button class="btn btn-ghost btn-sm pkg-copy-btn" data-triplet="${tripletIdx}" title="Copiar dados do Aurora Destaque desta linha">↩</button>` : ''}
+        ${!isFirstInGroup ? `<button class="btn btn-ghost btn-sm pkg-copy-btn" data-src="${srcRowIdx}" data-dst="${i}" title="Copiar dados do primeiro slot desta semana">↩</button>` : ''}
         <span id="pkg-s-${i}">${statusHtml}</span>
       </td>
     </tr>`
@@ -1265,7 +1286,7 @@ function renderPackageForm(year, month) {
         <button class="btn btn-ghost btn-sm" id="pkg-back">← Meses</button>
         <div class="pkg-form-title">
           <h2>${MONTH_NAMES[month]} ${year}</h2>
-          <p>12 spots · 4× Aurora Destaque · 4× Índice Destaque · 4× Aurora Corpo</p>
+          <p>${totalRows} spots · ${pkgSlots.map(s => `4× ${s.label}`).join(' · ')}</p>
         </div>
         <div class="pkg-form-actions">
           <span id="pkg-save-count"></span>
@@ -1296,7 +1317,7 @@ function renderPackageForm(year, month) {
   document.getElementById('pkg-back').addEventListener('click', () => renderPackageMonths())
   document.getElementById('pkg-save-all').addEventListener('click', () => savePackage(year, month))
   document.querySelectorAll('.pkg-copy-btn').forEach(btn => {
-    btn.addEventListener('click', () => copyTripletContent(Number(btn.dataset.triplet)))
+    btn.addEventListener('click', () => copyRowContent(Number(btn.dataset.src), Number(btn.dataset.dst)))
   })
   document.querySelectorAll('.pkg-date-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1308,11 +1329,9 @@ function renderPackageForm(year, month) {
   updatePkgCounter()
 }
 
-function copyTripletContent(tripletIdx) {
-  // Source: Aurora Destaque row (i = tripletIdx * 3)
-  // Target: Índice Destaque row (i = tripletIdx * 3 + 1)
-  const srcRow = document.querySelector(`.pkg-row[data-row="${tripletIdx * 3}"]`)
-  const dstRow = document.querySelector(`.pkg-row[data-row="${tripletIdx * 3 + 1}"]`)
+function copyRowContent(srcIdx, dstIdx) {
+  const srcRow = document.querySelector(`.pkg-row[data-row="${srcIdx}"]`)
+  const dstRow = document.querySelector(`.pkg-row[data-row="${dstIdx}"]`)
   if (!srcRow || !dstRow) return
 
   for (const f of ['campaign_name', 'authorship', 'suggested_text', 'cover_link', 'redirect_link']) {

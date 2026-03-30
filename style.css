@@ -1335,10 +1335,12 @@ tr:hover td { background: #fafaf8; }
 .pkg-row.pkg-aurora-d td  { background: #fef6fa; }
 .pkg-row.pkg-indice-d td  { background: #fefdf0; }
 .pkg-row.pkg-aurora-c td  { background: #f8fbf6; }
+.pkg-row.pkg-indice-c td  { background: #f0f8f0; }
 
 .pkg-row.pkg-row-filled.pkg-aurora-d td { background: #f8e2ee; }
 .pkg-row.pkg-row-filled.pkg-indice-d td { background: #faf0b0; }
 .pkg-row.pkg-row-filled.pkg-aurora-c td { background: #e4f2e4; }
+.pkg-row.pkg-row-filled.pkg-indice-c td { background: #c8e8c8; }
 
 .pkg-row.sh-row-error td { background: #fff5f5 !important; }
 
@@ -1369,6 +1371,11 @@ tr:hover td { background: #fafaf8; }
   background: transparent;
   color: var(--aurora);
   border: 1.5px dashed var(--aurora-mid);
+}
+.pkg-slot-badge.pkg-indice-c {
+  background: transparent;
+  color: var(--indice);
+  border: 1.5px dashed var(--indice-light);
 }
 
 /* Cell widths */
