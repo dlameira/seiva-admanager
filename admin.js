@@ -147,7 +147,6 @@ window.editClient = function(clientId) {
   editingClientId = clientId
   document.getElementById('client-modal-title').textContent = 'Editar Cliente'
   document.getElementById('c-company').value = client.company_name || ''
-  document.getElementById('c-code').value = client.access_code || ''
   document.getElementById('c-username').value = client.username || ''
   document.getElementById('c-password').value = client.password || ''
   document.getElementById('c-email').value = client.contact_email || ''
@@ -163,7 +162,6 @@ document.getElementById('btn-new-client').addEventListener('click', () => {
   editingClientId = null
   document.getElementById('client-modal-title').textContent = 'Novo Cliente'
   document.getElementById('c-company').value = ''
-  document.getElementById('c-code').value = ''
   document.getElementById('c-username').value = ''
   document.getElementById('c-password').value = ''
   document.getElementById('c-email').value = ''
@@ -171,16 +169,6 @@ document.getElementById('btn-new-client').addEventListener('click', () => {
   document.getElementById('c-active').checked = true
   clearError('client-error')
   openModal('client-modal')
-})
-
-// Generate access code
-document.getElementById('btn-gen-code').addEventListener('click', () => {
-  const name = document.getElementById('c-company').value.trim()
-  const prefix = name
-    ? name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 4)
-    : 'CLI'
-  const num = String(Math.floor(1000 + Math.random() * 9000))
-  document.getElementById('c-code').value = `SEIVA-${prefix}-${num}`
 })
 
 // Close client modal
@@ -191,7 +179,6 @@ document.getElementById('btn-client-cancel').addEventListener('click', () => clo
 document.getElementById('btn-client-save').addEventListener('click', async () => {
   if (!isAdmin) return
   const company = document.getElementById('c-company').value.trim()
-  const code = document.getElementById('c-code').value.trim().toUpperCase()
   const username = document.getElementById('c-username').value.trim()
   const password = document.getElementById('c-password').value.trim()
   const email = document.getElementById('c-email').value.trim()
@@ -200,18 +187,18 @@ document.getElementById('btn-client-save').addEventListener('click', async () =>
   clearError('client-error')
 
   if (!company) return showError('client-error', 'Informe o nome da empresa.')
-  if (!code) return showError('client-error', 'Informe o código de acesso.')
-  if (code.length < 4) return showError('client-error', 'Código muito curto (mínimo 4 caracteres).')
+  if (!username) return showError('client-error', 'Informe o username.')
+  if (!password) return showError('client-error', 'Informe a senha.')
 
   // Check uniqueness
-  const duplicate = allClients.find(c => c.access_code === code && c.id !== editingClientId)
-  if (duplicate) return showError('client-error', 'Este código já está em uso por outro cliente.')
+  const duplicate = allClients.find(c => c.username === username && c.id !== editingClientId)
+  if (duplicate) return showError('client-error', 'Este username já está em uso por outro cliente.')
 
   const btn = document.getElementById('btn-client-save')
   btn.disabled = true
   btn.textContent = 'Salvando...'
   try {
-    const data = { company_name: company, access_code: code, username: username || null, password: password || null, contact_email: email || null, notes: notes || null, active }
+    const data = { company_name: company, username, password, contact_email: email || null, notes: notes || null, active }
     if (editingClientId) {
       await updateClient(editingClientId, data)
       const idx = allClients.findIndex(c => c.id === editingClientId)
