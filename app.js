@@ -1161,8 +1161,8 @@ function renderPackageMonths() {
   // (Jan/Feb/Mar of a year still shows that year's upcoming April-March cycle)
   const seasonYear = curYear
 
-  // Generate April (seasonYear) → March (seasonYear+1)
-  const months = Array.from({ length: 12 }, (_, i) => {
+  // Generate April (seasonYear) → December (seasonYear)
+  const months = Array.from({ length: 9 }, (_, i) => {
     const absMonth = 3 + i // April = 3
     return {
       year:  seasonYear + Math.floor(absMonth / 12),
