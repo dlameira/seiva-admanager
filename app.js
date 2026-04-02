@@ -1178,10 +1178,10 @@ function renderPackageMonths() {
     const availableFrom = new Date(year, month - 2, 1)
     const isPast        = year < curYear || (year === curYear && month < curMonth)
     const isCurrent     = year === curYear && month === curMonth
-    const isEditable    = !isPast && !isCurrent && now >= availableFrom
+    const isEditable    = !isPast && now >= availableFrom
 
     let statusHtml
-    if (isPast || isCurrent) {
+    if (isPast) {
       statusHtml = `<div class="pkg-month-action pkg-month-locked">Encerrado</div>`
     } else if (isEditable) {
       statusHtml = `<div class="pkg-month-action">Preencher →</div>`
@@ -1190,7 +1190,7 @@ function renderPackageMonths() {
       statusHtml = `<div class="pkg-month-action pkg-month-locked">Disponível em ${avStr}</div>`
     }
 
-    const cardCls = `pkg-month-card${(isPast || isCurrent) ? ' pkg-month-past' : ''}${!isEditable ? ' pkg-month-disabled' : ''}`
+    const cardCls = `pkg-month-card${isPast ? ' pkg-month-past' : ''}${!isEditable ? ' pkg-month-disabled' : ''}`
     return `<button class="${cardCls}" data-year="${year}" data-month="${month}" data-editable="${isEditable}">
       <div class="pkg-month-name">${MONTH_NAMES[month]}</div>
       <div class="pkg-month-year">${year}</div>
