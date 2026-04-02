@@ -1533,35 +1533,37 @@ async function savePackage(year, month) {
     const redirect_link   = g('redirect_link')
     const statusEl        = document.getElementById(`pkg-s-${rowIdx}`)
 
-    // Skip rows without a date
-    if (!date) continue
+    // Skip rows with no data at all (no date AND no fields filled)
+    const hasAnyField = campaign_name || authorship || suggested_text || cover_link || redirect_link
+    if (!date && !hasAnyField && !bookingId) continue
 
     const errs = []
-    if (isDayBlocked(date, allBlockedDates)) errs.push('Data bloqueada ou fim de semana')
     if (cover_link && !isValidUrl(cover_link)) errs.push('Link da capa inválido')
     if (redirect_link && !isValidUrl(redirect_link)) errs.push('Link de redirecionamento inválido')
 
     let dateWarnMsg = ''
-    if (!bookingId) {
-      const combined = [...allBookings, ...tempAdded]
-      if (!isSlotFree(date, nl, fmt, combined)) {
-        const nearest = findNearestFreeSlotDate(date, nl, fmt, year, month, combined)
-        if (!nearest) {
-          errs.push('Nenhuma data disponível neste mês para este slot')
-        } else {
-          const origFormatted = formatDate(date)
-          const newFormatted  = formatDate(nearest.date)
-          // Update hidden input and display button, re-read for saving
-          row.querySelector('.pkg-date').value = nearest.date
-          const dispBtn = row.querySelector('.pkg-date-btn')
-          if (dispBtn) { dispBtn.textContent = newFormatted; dispBtn.classList.add('has-date') }
-          date = nearest.date
-          dateWarnMsg = `Data alterada de ${origFormatted} para ${newFormatted} — slot indisponível`
+    if (date) {
+      if (isDayBlocked(date, allBlockedDates)) errs.push('Data bloqueada ou fim de semana')
+      if (!bookingId) {
+        const combined = [...allBookings, ...tempAdded]
+        if (!isSlotFree(date, nl, fmt, combined)) {
+          const nearest = findNearestFreeSlotDate(date, nl, fmt, year, month, combined)
+          if (!nearest) {
+            errs.push('Nenhuma data disponível neste mês para este slot')
+          } else {
+            const origFormatted = formatDate(date)
+            const newFormatted  = formatDate(nearest.date)
+            row.querySelector('.pkg-date').value = nearest.date
+            const dispBtn = row.querySelector('.pkg-date-btn')
+            if (dispBtn) { dispBtn.textContent = newFormatted; dispBtn.classList.add('has-date') }
+            date = nearest.date
+            dateWarnMsg = `Data alterada de ${origFormatted} para ${newFormatted} — slot indisponível`
+          }
         }
+        const combined2 = [...allBookings, ...tempAdded]
+        const q = clientHasQuota(session.clientId, nl, fmt, allQuotas, combined2, date)
+        if (!q.allowed) errs.push(q.blockedByFrequency ? `Limite ${q.period === 'semanal' ? 'semanal' : 'mensal'} atingido` : 'Cota esgotada')
       }
-      const combined2 = [...allBookings, ...tempAdded]
-      const q = clientHasQuota(session.clientId, nl, fmt, allQuotas, combined2, date)
-      if (!q.allowed) errs.push(q.blockedByFrequency ? `Limite ${q.period === 'semanal' ? 'semanal' : 'mensal'} atingido` : 'Cota esgotada')
     }
 
     if (dateWarnMsg && statusEl) {
@@ -1575,7 +1577,7 @@ async function savePackage(year, month) {
       continue
     }
 
-    const data = { date, newsletter: nl, format: fmt, campaign_name, authorship, suggested_text,
+    const data = { date: date || null, newsletter: nl, format: fmt, campaign_name, authorship, suggested_text,
       cover_link: cover_link || null, redirect_link: redirect_link || null }
 
     try {
