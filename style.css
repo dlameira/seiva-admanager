@@ -1127,11 +1127,12 @@ tr:hover td { background: #fafaf8; }
   background: transparent;
   font-size: .82rem;
   color: var(--text);
-  padding: .3rem .4rem;
+  padding: .4rem .4rem;
   border-radius: var(--radius-sm);
   outline: none;
   font-family: inherit;
   box-sizing: border-box;
+  min-height: 2.2rem;
 }
 
 .sh-input:focus {
@@ -1327,7 +1328,7 @@ tr:hover td { background: #fafaf8; }
 
 .pkg-row td {
   border-bottom: 1px solid var(--border);
-  padding: .22rem .3rem;
+  padding: .45rem .4rem;
   vertical-align: middle;
 }
 
