@@ -1446,6 +1446,7 @@ function renderPackageForm(year, month) {
     input.readOnly = false  // ISBN é editável diretamente
     input.addEventListener('blur', async () => {
       const isbn = input.value.replace(/[^0-9Xx]/g, '')
+      if (isbn) input.value = isbn  // limpa travessões e espaços do display
       if (isbn.length !== 10 && isbn.length !== 13) return
       const row = input.closest('.pkg-row')
       if (!row) return
