@@ -1340,11 +1340,25 @@ function renderPackageForm(year, month) {
     btn.addEventListener('click', async () => {
       if (!confirm('Limpar este spot?')) return
       const id = btn.dataset.id
+      const row = btn.closest('.pkg-row')
       try {
         await deleteBooking(id)
         allBookings = allBookings.filter(b => String(b.id) !== id)
         if (window._ownBookings) window._ownBookings = window._ownBookings.filter(b => String(b.id) !== id)
-        renderPackageForm(year, month)
+        // Limpar campos da linha sem re-renderizar o formulário inteiro
+        if (row) {
+          row.dataset.bookingId = ''
+          row.classList.remove('pkg-row-filled')
+          const dateInput = row.querySelector('.pkg-date')
+          const dateBtn = row.querySelector('.pkg-date-btn')
+          if (dateInput) dateInput.value = ''
+          if (dateBtn) { dateBtn.textContent = '📅 data'; dateBtn.classList.remove('has-date') }
+          row.querySelectorAll('.sh-input').forEach(input => { input.value = '' })
+          const statusEl = document.getElementById(`pkg-s-${row.dataset.row}`)
+          if (statusEl) statusEl.innerHTML = ''
+          btn.remove()
+          updatePkgCounter()
+        }
       } catch (e) {
         alert('Erro ao limpar: ' + e.message)
       }
