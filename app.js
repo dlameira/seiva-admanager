@@ -1158,7 +1158,6 @@ function renderPackageMonths() {
   const curYear  = now.getFullYear()
   const curMonth = now.getMonth()
   const pkgSlots = getClientPkgSlots()
-  const slotsPerMonth = pkgSlots.length * 4
 
   const myBookings = (window._ownBookings || []).filter(b => b.status !== 'rejeitado')
 
@@ -1177,6 +1176,8 @@ function renderPackageMonths() {
 
   const cards = months.map(({ year, month }) => {
     const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
+    const weeks = getMonthWeeks(year, month)
+    const slotsPerMonth = pkgSlots.length * weeks.length
     const filled   = myBookings.filter(b => b.date?.startsWith(monthStr)).length
 
     // A month is editable if today >= 1st of (month - 2)
@@ -1223,10 +1224,52 @@ function renderPackageMonths() {
   })
 }
 
+function getMonthWeeks(year, month) {
+  // Returns array of { weekIdx, label, startDate, endDate } for business weeks in the month
+  const weeks = []
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  let currentWeek = null
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month, d)
+    const dow = date.getDay()
+    if (dow === 0 || dow === 6) continue // skip weekends
+
+    // ISO week: Monday = start of week
+    const mondayOffset = dow === 0 ? -6 : 1 - dow
+    const monday = new Date(date)
+    monday.setDate(date.getDate() + mondayOffset)
+    const weekKey = `${monday.getFullYear()}-${String(monday.getMonth()+1).padStart(2,'0')}-${String(monday.getDate()).padStart(2,'0')}`
+
+    if (!currentWeek || currentWeek.key !== weekKey) {
+      const friday = new Date(monday)
+      friday.setDate(monday.getDate() + 4)
+      currentWeek = {
+        key: weekKey,
+        weekIdx: weeks.length,
+        label: `${monday.getDate()}/${monday.getMonth()+1} – ${friday.getDate()}/${friday.getMonth()+1}`,
+        startDate: toISODate(monday),
+        endDate: toISODate(friday),
+      }
+      weeks.push(currentWeek)
+    }
+  }
+  return weeks
+}
+
+function getWeekForDate(dateStr, weeks) {
+  if (!dateStr) return -1
+  for (const w of weeks) {
+    if (dateStr >= w.startDate && dateStr <= w.endDate) return w.weekIdx
+  }
+  return -1
+}
+
 function renderPackageForm(year, month) {
   const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
   const pkgSlots = getClientPkgSlots()
-  const totalRows = pkgSlots.length * 4
+  const weeks = getMonthWeeks(year, month)
+  const totalRows = pkgSlots.length * weeks.length
 
   // My existing bookings for this month
   const myMonthBkgs = allBookings.filter(b =>
@@ -1235,73 +1278,86 @@ function renderPackageForm(year, month) {
     b.status !== 'rejeitado'
   )
 
-  // Group by slot type, sorted by date
-  const bySlot = {}
-  for (const slot of pkgSlots) {
-    const key = `${slot.nl}_${slot.fmt}`
-    bySlot[key] = myMonthBkgs
-      .filter(b => b.newsletter === slot.nl && b.format === slot.fmt)
-      .sort((a, b) => a.date.localeCompare(b.date))
+  // Group by week + slot type
+  // byWeekSlot[weekIdx][slotKey] = booking or null
+  const byWeekSlot = {}
+  for (let w = 0; w < weeks.length; w++) {
+    byWeekSlot[w] = {}
+    for (const slot of pkgSlots) byWeekSlot[w][`${slot.nl}_${slot.fmt}`] = null
   }
 
-  // Pre-compute fully allocated weeks (all slot types have a booking)
-  const fullyAllocatedWeeks = new Set()
-  for (let w = 0; w < 4; w++) {
-    if (pkgSlots.every(s => bySlot[`${s.nl}_${s.fmt}`][w] != null)) fullyAllocatedWeeks.add(w)
+  for (const b of myMonthBkgs) {
+    const wIdx = getWeekForDate(b.date, weeks)
+    const key = `${b.newsletter}_${b.format}`
+    if (wIdx >= 0 && byWeekSlot[wIdx]?.[key] === null) {
+      byWeekSlot[wIdx][key] = b
+    }
+  }
+  // Bookings without a matching week (TBD or out of range) — assign to first empty slot
+  for (const b of myMonthBkgs) {
+    const wIdx = getWeekForDate(b.date, weeks)
+    const key = `${b.newsletter}_${b.format}`
+    if (wIdx < 0 || byWeekSlot[wIdx]?.[key] !== b) {
+      // Find first empty week for this slot
+      for (let w = 0; w < weeks.length; w++) {
+        if (byWeekSlot[w][key] === null) {
+          byWeekSlot[w][key] = b
+          break
+        }
+      }
+    }
   }
 
-  // Build interleaved rows, skipping fully allocated weeks
-  const slotCounters = {}
-  for (const s of pkgSlots) slotCounters[`${s.nl}_${s.fmt}`] = 0
+  let rowIdx = 0
+  const rowsHtml = weeks.map((week, wIdx) => {
+    return pkgSlots.map((slotDef, slotIdx) => {
+      const i = rowIdx++
+      const key = `${slotDef.nl}_${slotDef.fmt}`
+      const existing = byWeekSlot[wIdx][key] || null
 
-  const rowsHtml = Array.from({ length: totalRows }, (_, i) => {
-    const slotDef    = pkgSlots[i % pkgSlots.length]
-    const weekIdx    = Math.floor(i / pkgSlots.length)
-    if (fullyAllocatedWeeks.has(weekIdx)) { slotCounters[`${slotDef.nl}_${slotDef.fmt}`]++; return '' }
-    const key        = `${slotDef.nl}_${slotDef.fmt}`
-    const slotNum    = slotCounters[key]++
-    const existing   = bySlot[key][slotNum] || null
+      const isTBD    = existing?.promotional_period === 'TBD'
+      const dateVal  = (existing?.date && !isTBD) ? existing.date : ''
+      const isbnVal  = existing?.isbn            || ''
+      const campVal  = existing?.campaign_name  || ''
+      const authVal  = existing?.authorship     || ''
+      const textVal  = existing?.suggested_text || ''
+      const extraVal = existing?.extra_info     || ''
+      const capaVal  = existing?.cover_link     || ''
+      const redirVal = existing?.redirect_link  || ''
+      const bookId   = existing?.id             || ''
 
-    const isTBD    = existing?.promotional_period === 'TBD'
-    const dateVal  = (existing?.date && !isTBD) ? existing.date : ''
-    const campVal  = existing?.campaign_name  || ''
-    const authVal  = existing?.authorship     || ''
-    const textVal  = existing?.suggested_text || ''
-    const extraVal = existing?.extra_info     || ''
-    const capaVal  = existing?.cover_link     || ''
-    const redirVal = existing?.redirect_link  || ''
-    const bookId   = existing?.id             || ''
+      const isFirstInGroup = slotIdx === 0
+      const isWeekStart    = isFirstInGroup && wIdx > 0
+      const statusHtml     = existing
+        ? `<span class="badge badge-${existing.status} badge-xs">${BOOKING_STATUS[existing.status]?.label || existing.status}</span>`
+        : ''
+      const srcRowIdx = i - slotIdx // first row in this week group
 
-    const isFirstInGroup = i % pkgSlots.length === 0
-    const isWeekStart    = isFirstInGroup && i > 0
-    const statusHtml     = existing
-      ? `<span class="badge badge-${existing.status} badge-xs">${BOOKING_STATUS[existing.status]?.label || existing.status}</span>`
-      : ''
-    const srcRowIdx = weekIdx * pkgSlots.length
-
-    return `<tr class="pkg-row ${slotDef.cls}${existing ? ' pkg-row-filled' : ''}${isWeekStart ? ' pkg-triplet-start' : ''}"
-        data-row="${i}" data-triplet="${weekIdx}" data-nl="${slotDef.nl}" data-fmt="${slotDef.fmt}" data-booking-id="${bookId}">
-      <td class="pkg-td-num">${weekIdx + 1}</td>
-      <td class="pkg-td-slot"><span class="pkg-slot-badge ${slotDef.cls}">${slotDef.label}</span></td>
-      <td class="pkg-td-date">
-        <input type="hidden" class="pkg-date" value="${dateVal}" />
-        <button type="button" class="pkg-date-btn${dateVal ? ' has-date' : ''}" data-nl="${slotDef.nl}" data-fmt="${slotDef.fmt}">
-          ${dateVal ? formatDate(dateVal) : '📅 data'}
-        </button>
-      </td>
-      <td class="pkg-td-isbn"><input class="sh-input pkg-isbn" data-field="isbn" value="" placeholder="ISBN" /></td>
-      <td class="pkg-td-camp"><input class="sh-input" data-field="campaign_name" value="${escHtml(campVal)}" placeholder="Título da campanha" /></td>
-      <td class="pkg-td-auth"><input class="sh-input" data-field="authorship" value="${escHtml(authVal)}" placeholder="Autoria" /></td>
-      <td class="pkg-td-text"><input class="sh-input" data-field="suggested_text" value="${escHtml(textVal)}" placeholder="Sinopse" /></td>
-      <td class="pkg-td-text"><input class="sh-input" data-field="extra_info" value="${escHtml(extraVal)}" placeholder="Cupons, promos..." /></td>
-      <td class="pkg-td-link"><input class="sh-input" data-field="cover_link" value="${escHtml(capaVal)}" placeholder="https://..." /></td>
-      <td class="pkg-td-link"><input class="sh-input" data-field="redirect_link" value="${escHtml(redirVal)}" placeholder="https://..." /></td>
-      <td class="pkg-td-act">
-        ${!isFirstInGroup ? `<button class="btn btn-ghost btn-sm pkg-copy-btn" data-src="${srcRowIdx}" data-dst="${i}" title="Copiar dados do primeiro slot desta semana">↩</button>` : ''}
-        ${bookId ? `<button class="btn btn-ghost btn-sm pkg-del-btn" data-id="${bookId}" data-row="${i}" title="Apagar" style="color:var(--red)">✕</button>` : ''}
-        <span id="pkg-s-${i}">${statusHtml}</span>
-      </td>
-    </tr>`
+      return `<tr class="pkg-row ${slotDef.cls}${existing ? ' pkg-row-filled' : ''}${isWeekStart ? ' pkg-triplet-start' : ''}"
+          data-row="${i}" data-triplet="${wIdx}" data-nl="${slotDef.nl}" data-fmt="${slotDef.fmt}" data-booking-id="${bookId}"
+          data-week-start="${week.startDate}" data-week-end="${week.endDate}">
+        <td class="pkg-td-num">${isFirstInGroup ? `<span class="pkg-week-label">Sem ${wIdx + 1}<br><small>${week.label}</small></span>` : ''}</td>
+        <td class="pkg-td-slot"><span class="pkg-slot-badge ${slotDef.cls}">${slotDef.label}</span></td>
+        <td class="pkg-td-date">
+          <input type="hidden" class="pkg-date" value="${dateVal}" />
+          <button type="button" class="pkg-date-btn${dateVal ? ' has-date' : ''}" data-nl="${slotDef.nl}" data-fmt="${slotDef.fmt}">
+            ${dateVal ? formatDate(dateVal) : '📅 data'}
+          </button>
+        </td>
+        <td class="pkg-td-isbn"><input class="sh-input pkg-isbn" data-field="isbn" value="${escHtml(isbnVal)}" placeholder="ISBN" /></td>
+        <td class="pkg-td-camp"><input class="sh-input" data-field="campaign_name" value="${escHtml(campVal)}" placeholder="Título da campanha" /></td>
+        <td class="pkg-td-auth"><input class="sh-input" data-field="authorship" value="${escHtml(authVal)}" placeholder="Autoria" /></td>
+        <td class="pkg-td-text"><input class="sh-input" data-field="suggested_text" value="${escHtml(textVal)}" placeholder="Sinopse" /></td>
+        <td class="pkg-td-text"><input class="sh-input" data-field="extra_info" value="${escHtml(extraVal)}" placeholder="Cupons, promos..." /></td>
+        <td class="pkg-td-link"><input class="sh-input" data-field="cover_link" value="${escHtml(capaVal)}" placeholder="https://..." /></td>
+        <td class="pkg-td-link"><input class="sh-input" data-field="redirect_link" value="${escHtml(redirVal)}" placeholder="https://..." /></td>
+        <td class="pkg-td-act">
+          ${!isFirstInGroup ? `<button class="btn btn-ghost btn-sm pkg-copy-btn" data-src="${srcRowIdx}" data-dst="${i}" title="Copiar dados do primeiro slot desta semana">↩</button>` : ''}
+          ${bookId ? `<button class="btn btn-ghost btn-sm pkg-del-btn" data-id="${bookId}" data-row="${i}" title="Apagar" style="color:var(--red)">✕</button>` : ''}
+          <span id="pkg-s-${i}">${statusHtml}</span>
+        </td>
+      </tr>`
+    }).join('')
   }).join('')
 
   document.getElementById('pkg-content').innerHTML = `
@@ -1310,7 +1366,7 @@ function renderPackageForm(year, month) {
         <button class="btn btn-ghost btn-sm" id="pkg-back">← Meses</button>
         <div class="pkg-form-title">
           <h2>${MONTH_NAMES[month]} ${year}</h2>
-          <p>${totalRows} spots · ${pkgSlots.map(s => `1× ${s.label}`).join(' / semana')}</p>
+          <p>${weeks.length} semanas · ${pkgSlots.map(s => `1× ${s.label}`).join(' / semana')}</p>
         </div>
         <div class="pkg-form-actions">
           <span id="pkg-save-count"></span>
@@ -1321,7 +1377,7 @@ function renderPackageForm(year, month) {
         <table class="pkg-table">
           <thead>
             <tr>
-              <th class="pkg-th-num">#</th>
+              <th class="pkg-th-num">Semana</th>
               <th>Slot</th>
               <th>Data</th>
               <th>ISBN</th>
@@ -1632,6 +1688,7 @@ async function savePackage(year, month) {
     const bookingId  = row.dataset.bookingId
     const nl         = row.dataset.nl
     const fmt        = row.dataset.fmt
+    const isbn            = g('isbn')
     const campaign_name   = g('campaign_name')
     const authorship      = g('authorship')
     const suggested_text  = g('suggested_text')
@@ -1641,7 +1698,7 @@ async function savePackage(year, month) {
     const statusEl        = document.getElementById(`pkg-s-${rowIdx}`)
 
     // Skip rows with no data at all (no date AND no fields filled)
-    const hasAnyField = campaign_name || authorship || suggested_text || extra_info || cover_link || redirect_link
+    const hasAnyField = isbn || campaign_name || authorship || suggested_text || extra_info || cover_link || redirect_link
     if (!date && !hasAnyField && !bookingId) continue
 
     const errs = []
@@ -1687,7 +1744,7 @@ async function savePackage(year, month) {
     // Sem data → salvar com dia 1 do mês + flag TBD (Directus exige date NOT NULL)
     const noDate = !date
     if (noDate) date = `${year}-${String(month + 1).padStart(2, '0')}-01`
-    const data = { date, newsletter: nl, format: fmt, campaign_name, authorship, suggested_text,
+    const data = { date, newsletter: nl, format: fmt, isbn: isbn || null, campaign_name, authorship, suggested_text,
       extra_info: extra_info || null, cover_link: cover_link || null, redirect_link: redirect_link || null,
       promotional_period: noDate ? 'TBD' : null }
 

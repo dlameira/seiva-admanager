@@ -1352,7 +1352,7 @@ tr:hover td { background: #fafaf8; }
   white-space: nowrap;
 }
 
-.pkg-th-num { width: 36px; text-align: center; }
+.pkg-th-num { width: 80px; text-align: center; }
 
 .pkg-row td {
   border-bottom: 1px solid var(--border);
@@ -1408,7 +1408,9 @@ tr:hover td { background: #fafaf8; }
 }
 
 /* Cell widths */
-.pkg-td-num  { text-align: center; width: 36px; font-size: .73rem; font-weight: 700; color: var(--text-light); }
+.pkg-td-num  { text-align: center; width: 80px; font-size: .73rem; font-weight: 700; color: var(--text-light); vertical-align: top; padding-top: 10px; }
+.pkg-week-label { font-size: .7rem; line-height: 1.3; }
+.pkg-week-label small { font-weight: 400; color: var(--text-muted); }
 .pkg-td-slot { width: 140px; }
 .pkg-td-date { width: 130px; }
 .pkg-td-camp { min-width: 150px; }

@@ -36,7 +36,7 @@ async function request(path, options = {}) {
 
 export async function getBookings(filters = {}) {
   const params = new URLSearchParams()
-  params.set('fields', 'id,date,newsletter,format,status,campaign_name,authorship,campaign,suggested_text,extra_info,promotional_period,cover_link,redirect_link,client_id')
+  params.set('fields', 'id,date,newsletter,format,status,campaign_name,authorship,campaign,isbn,suggested_text,extra_info,promotional_period,cover_link,redirect_link,client_id')
   params.set('limit', '-1')
   params.set('sort', 'date')
 
@@ -51,7 +51,7 @@ export async function getBookings(filters = {}) {
 }
 
 export async function getBooking(id) {
-  return request(`/items/ad_bookings/${id}?fields=id,date,newsletter,format,status,campaign_name,authorship,campaign,suggested_text,extra_info,promotional_period,cover_link,redirect_link,admin_notes,client_id`)
+  return request(`/items/ad_bookings/${id}?fields=id,date,newsletter,format,status,campaign_name,authorship,campaign,isbn,suggested_text,extra_info,promotional_period,cover_link,redirect_link,admin_notes,client_id`)
 }
 
 export async function createBooking(data) {
