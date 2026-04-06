@@ -1310,7 +1310,18 @@ function renderPackageForm(year, month) {
 
   let rowIdx = 0
   const rowsHtml = weeks.map((week, wIdx) => {
-    return pkgSlots.map((slotDef, slotIdx) => {
+    // Sort slots within each week: slots with dates first (chronological), then empty ones
+    const sortedSlots = [...pkgSlots].sort((a, b) => {
+      const bkgA = byWeekSlot[wIdx][`${a.nl}_${a.fmt}`]
+      const bkgB = byWeekSlot[wIdx][`${b.nl}_${b.fmt}`]
+      const dateA = bkgA?.date || ''
+      const dateB = bkgB?.date || ''
+      if (dateA && dateB) return dateA.localeCompare(dateB)
+      if (dateA) return -1
+      if (dateB) return 1
+      return 0
+    })
+    return sortedSlots.map((slotDef, slotIdx) => {
       const i = rowIdx++
       const key = `${slotDef.nl}_${slotDef.fmt}`
       const existing = byWeekSlot[wIdx][key] || null
@@ -1366,7 +1377,7 @@ function renderPackageForm(year, month) {
         <button class="btn btn-ghost btn-sm" id="pkg-back">← Meses</button>
         <div class="pkg-form-title">
           <h2>${MONTH_NAMES[month]} ${year}</h2>
-          <p>${weeks.length} semanas · ${pkgSlots.map(s => `1× ${s.label}`).join(' / semana')}</p>
+          <p>${weeks.length} semanas · ${pkgSlots.map(s => `1× ${s.label}`).join(' · ')} / semana</p>
         </div>
         <div class="pkg-form-actions">
           <span id="pkg-save-count"></span>
