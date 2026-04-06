@@ -1520,6 +1520,38 @@ function renderPackageForm(year, month) {
   })
 }
 
+function reorderWeekRows(weekIdx) {
+  const tbody = document.getElementById('pkg-body')
+  if (!tbody) return
+  const rows = [...tbody.querySelectorAll(`.pkg-row[data-triplet="${weekIdx}"]`)]
+  if (rows.length < 2) return
+
+  // Sort: rows with dates first (chronological), then empty
+  rows.sort((a, b) => {
+    const dateA = a.querySelector('.pkg-date')?.value || ''
+    const dateB = b.querySelector('.pkg-date')?.value || ''
+    if (dateA && dateB) return dateA.localeCompare(dateB)
+    if (dateA) return -1
+    if (dateB) return 1
+    return 0
+  })
+
+  // Re-insert in order (after the first row's previous sibling, or at the position of the first row)
+  const firstRow = tbody.querySelector(`.pkg-row[data-triplet="${weekIdx}"]`)
+  const anchor = firstRow?.previousElementSibling
+  for (const row of rows) {
+    if (anchor) {
+      anchor.after(row)
+    } else {
+      tbody.prepend(row)
+    }
+  }
+  // Fix: ensure rows are consecutive after the anchor
+  for (let i = 1; i < rows.length; i++) {
+    rows[i - 1].after(rows[i])
+  }
+}
+
 function copyRowContent(srcIdx, dstIdx) {
   const srcRow = document.querySelector(`.pkg-row[data-row="${srcIdx}"]`)
   const dstRow = document.querySelector(`.pkg-row[data-row="${dstIdx}"]`)
@@ -1706,7 +1738,13 @@ function openDatePickerPopup(hiddenInput, triggerBtn, nl, fmt, year, month, week
         triggerBtn.classList.add('has-date')
       }
 
+      // Reorder rows in the affected week(s)
+      const affectedWeek = (isOtherWeek && currentRow)
+        ? getWeekForDate(chosenDate, getMonthWeeks(year, month))
+        : currentRow?.dataset.triplet
       overlay.remove()
+      if (affectedWeek !== undefined && affectedWeek >= 0) reorderWeekRows(affectedWeek)
+      if (isOtherWeek && currentRow) reorderWeekRows(currentRow.dataset.triplet)
       updatePkgCounter()
     })
   })
