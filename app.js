@@ -364,6 +364,7 @@ function openBookingModal(dateStr, booking = null, preNl = null, preFmt = null) 
   document.getElementById('f-authorship').value = booking?.authorship || ''
   document.getElementById('f-campaign').value = booking?.campaign || ''
   document.getElementById('f-suggested-text').value = booking?.suggested_text || ''
+  document.getElementById('f-extra-info').value = booking?.extra_info || ''
   document.getElementById('f-promotional-period').value = booking?.promotional_period || ''
   document.getElementById('f-cover-link').value = booking?.cover_link || ''
   document.getElementById('f-redirect-link').value = booking?.redirect_link || ''
@@ -458,6 +459,7 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
   const authorship = document.getElementById('f-authorship').value.trim()
   const campaign = document.getElementById('f-campaign').value.trim()
   const suggestedText = document.getElementById('f-suggested-text').value.trim()
+  const extraInfo = document.getElementById('f-extra-info').value.trim()
   const promotionalPeriod = document.getElementById('f-promotional-period').value.trim()
   const coverLink = document.getElementById('f-cover-link').value.trim()
   const redirectLink = document.getElementById('f-redirect-link').value.trim()
@@ -472,7 +474,7 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
   if (!format) return showErr(errEl, 'Selecione o formato do anúncio.')
   if (!campaignName) return showErr(errEl, 'Informe o título/nome da campanha.')
   if (!authorship) return showErr(errEl, 'Informe a autoria.')
-  if (!suggestedText) return showErr(errEl, 'Informe o texto sugerido.')
+  if (!suggestedText) return showErr(errEl, 'Informe a sinopse.')
   if (coverLink && !isValidUrl(coverLink)) return showErr(errEl, 'Link da capa inválido (deve começar com http).')
   if (redirectLink && !isValidUrl(redirectLink)) return showErr(errEl, 'Link de redirecionamento inválido (deve começar com http).')
 
@@ -501,6 +503,7 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
     authorship,
     campaign,
     suggested_text: suggestedText,
+    extra_info: extraInfo || null,
     promotional_period: promotionalPeriod || null,
     cover_link: coverLink || null,
     redirect_link: redirectLink || null,
@@ -584,7 +587,8 @@ function openDetailModal(booking) {
     ['Status', `<span class="badge badge-${booking.status}">${status.label || booking.status}</span>`],
     ['Autoria', booking.authorship],
     ['Campanha', booking.campaign],
-    ['Texto sugerido', booking.suggested_text],
+    ['Sinopse', booking.suggested_text],
+    ['+Infos', booking.extra_info],
     ['Período promocional', booking.promotional_period],
     ['Link da capa', booking.cover_link ? `<a href="${booking.cover_link}" target="_blank">${booking.cover_link}</a>` : null],
     ['Link de redirecionamento', booking.redirect_link ? `<a href="${booking.redirect_link}" target="_blank">${booking.redirect_link}</a>` : null],
@@ -749,7 +753,8 @@ function renderSheet(mode = 'calendar') {
         <option value="destaque" ${fmt === 'destaque' ? 'selected' : ''}>Destaque</option>
         <option value="corpo" ${fmt === 'corpo' ? 'selected' : ''}>Corpo</option>
       </select></td>
-      <td><input class="sh-input sh-text-col" data-field="suggested_text" value="${escHtml(booking?.suggested_text || '')}" placeholder="Texto do anúncio" /></td>
+      <td><input class="sh-input sh-text-col" data-field="suggested_text" value="${escHtml(booking?.suggested_text || '')}" placeholder="Sinopse" /></td>
+      <td><input class="sh-input sh-text-col" data-field="extra_info" value="${escHtml(booking?.extra_info || '')}" placeholder="Cupons, promos..." /></td>
       <td><input class="sh-input sh-link-col" data-field="cover_link" value="${escHtml(booking?.cover_link || '')}" placeholder="https://..." /></td>
       <td><input class="sh-input sh-link-col" data-field="redirect_link" value="${escHtml(booking?.redirect_link || '')}" placeholder="https://..." /></td>
       <td class="sh-status-cell" id="sh-s-${idx}"></td>
@@ -783,7 +788,8 @@ function renderBlankSheet() {
         <option value="destaque">Destaque</option>
         <option value="corpo">Corpo</option>
       </select></td>
-      <td><input class="sh-input sh-text-col" data-field="suggested_text" placeholder="Texto do anúncio" /></td>
+      <td><input class="sh-input sh-text-col" data-field="suggested_text" placeholder="Sinopse" /></td>
+      <td><input class="sh-input sh-text-col" data-field="extra_info" placeholder="Cupons, promos..." /></td>
       <td><input class="sh-input sh-link-col" data-field="cover_link" placeholder="https://..." /></td>
       <td><input class="sh-input sh-link-col" data-field="redirect_link" placeholder="https://..." /></td>
       <td class="sh-status-cell" id="sh-s-${i}"></td>
@@ -834,6 +840,7 @@ document.getElementById('sheet-save-all').addEventListener('click', async () => 
     const newsletter = g('newsletter')
     const format = g('format')
     const suggested_text = g('suggested_text')
+    const extra_info = g('extra_info')
     const cover_link = g('cover_link')
     const redirect_link = g('redirect_link')
     const statusEl = document.getElementById(`sh-s-${i}`)
@@ -849,8 +856,7 @@ document.getElementById('sheet-save-all').addEventListener('click', async () => 
     if (!authorship) errs.push('Autoria obrigatória')
     if (!newsletter) errs.push('Newsletter obrigatória')
     if (!format) errs.push('Formato obrigatório')
-    if (suggested_text.length < 200) errs.push(`Texto curto (${suggested_text.length} chars, mínimo 200)`)
-    if (suggested_text.length > 500) errs.push('Texto longo (máximo 500)')
+    if (!suggested_text) errs.push('Sinopse obrigatória')
     if (cover_link && !isValidUrl(cover_link)) errs.push('Link da capa inválido')
     if (redirect_link && !isValidUrl(redirect_link)) errs.push('Link de redirecionamento inválido')
     if (!bookingId) {
@@ -870,7 +876,7 @@ document.getElementById('sheet-save-all').addEventListener('click', async () => 
     }
 
     const data = { date, newsletter, format, campaign_name, authorship, suggested_text,
-      cover_link: cover_link || null, redirect_link: redirect_link || null }
+      extra_info: extra_info || null, cover_link: cover_link || null, redirect_link: redirect_link || null }
     if (!bookingId) {
       data.status = isAnunciante ? 'pendente' : 'rascunho'
       if (isAnunciante) data.client_id = session.clientId
@@ -1261,6 +1267,7 @@ function renderPackageForm(year, month) {
     const campVal  = existing?.campaign_name  || ''
     const authVal  = existing?.authorship     || ''
     const textVal  = existing?.suggested_text || ''
+    const extraVal = existing?.extra_info     || ''
     const capaVal  = existing?.cover_link     || ''
     const redirVal = existing?.redirect_link  || ''
     const bookId   = existing?.id             || ''
@@ -1285,7 +1292,8 @@ function renderPackageForm(year, month) {
       <td class="pkg-td-isbn"><input class="sh-input pkg-isbn" data-field="isbn" value="" placeholder="ISBN" /></td>
       <td class="pkg-td-camp"><input class="sh-input" data-field="campaign_name" value="${escHtml(campVal)}" placeholder="Título da campanha" /></td>
       <td class="pkg-td-auth"><input class="sh-input" data-field="authorship" value="${escHtml(authVal)}" placeholder="Autoria" /></td>
-      <td class="pkg-td-text"><input class="sh-input" data-field="suggested_text" value="${escHtml(textVal)}" placeholder="Texto do anúncio" /></td>
+      <td class="pkg-td-text"><input class="sh-input" data-field="suggested_text" value="${escHtml(textVal)}" placeholder="Sinopse" /></td>
+      <td class="pkg-td-text"><input class="sh-input" data-field="extra_info" value="${escHtml(extraVal)}" placeholder="Cupons, promos..." /></td>
       <td class="pkg-td-link"><input class="sh-input" data-field="cover_link" value="${escHtml(capaVal)}" placeholder="https://..." /></td>
       <td class="pkg-td-link"><input class="sh-input" data-field="redirect_link" value="${escHtml(redirVal)}" placeholder="https://..." /></td>
       <td class="pkg-td-act">
@@ -1319,7 +1327,8 @@ function renderPackageForm(year, month) {
               <th>ISBN</th>
               <th>Campanha <span class="req">*</span></th>
               <th>Autoria <span class="req">*</span></th>
-              <th>Texto <span class="req">*</span></th>
+              <th>Sinopse <span class="req">*</span></th>
+              <th>+Infos</th>
               <th>Link da capa</th>
               <th>Link de redirecionamento</th>
               <th></th>
@@ -1407,7 +1416,7 @@ function renderPackageForm(year, month) {
   // Popup de edição ao clicar nos inputs
   const FIELD_LABELS = {
     campaign_name: 'Campanha', authorship: 'Autoria',
-    suggested_text: 'Texto do anúncio', cover_link: 'Link da capa', redirect_link: 'Link de redirecionamento',
+    suggested_text: 'Sinopse', extra_info: '+Infos', cover_link: 'Link da capa', redirect_link: 'Link de redirecionamento',
   }
   document.querySelectorAll('#pkg-body .sh-input:not(.pkg-isbn)').forEach(input => {
     input.readOnly = true
@@ -1445,7 +1454,7 @@ function copyRowContent(srcIdx, dstIdx) {
   const dstRow = document.querySelector(`.pkg-row[data-row="${dstIdx}"]`)
   if (!srcRow || !dstRow) return
 
-  for (const f of ['isbn', 'campaign_name', 'authorship', 'suggested_text', 'cover_link', 'redirect_link']) {
+  for (const f of ['isbn', 'campaign_name', 'authorship', 'suggested_text', 'extra_info', 'cover_link', 'redirect_link']) {
     const src = srcRow.querySelector(`[data-field="${f}"]`)
     const dst = dstRow.querySelector(`[data-field="${f}"]`)
     if (src && dst) dst.value = src.value
@@ -1626,12 +1635,13 @@ async function savePackage(year, month) {
     const campaign_name   = g('campaign_name')
     const authorship      = g('authorship')
     const suggested_text  = g('suggested_text')
+    const extra_info      = g('extra_info')
     const cover_link      = g('cover_link')
     const redirect_link   = g('redirect_link')
     const statusEl        = document.getElementById(`pkg-s-${rowIdx}`)
 
     // Skip rows with no data at all (no date AND no fields filled)
-    const hasAnyField = campaign_name || authorship || suggested_text || cover_link || redirect_link
+    const hasAnyField = campaign_name || authorship || suggested_text || extra_info || cover_link || redirect_link
     if (!date && !hasAnyField && !bookingId) continue
 
     const errs = []
@@ -1678,7 +1688,7 @@ async function savePackage(year, month) {
     const noDate = !date
     if (noDate) date = `${year}-${String(month + 1).padStart(2, '0')}-01`
     const data = { date, newsletter: nl, format: fmt, campaign_name, authorship, suggested_text,
-      cover_link: cover_link || null, redirect_link: redirect_link || null,
+      extra_info: extra_info || null, cover_link: cover_link || null, redirect_link: redirect_link || null,
       promotional_period: noDate ? 'TBD' : null }
 
     try {
