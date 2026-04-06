@@ -2,10 +2,10 @@
 import { requireAuth, logout } from './auth.js'
 import {
   getBookings, createBooking, updateBooking, deleteBooking,
-  getQuotas, getBlockedDates, getClients,
+  getQuotas, getBlockedDates, getClients, getBookByISBN,
 } from './api.js'
 import {
-  NEWSLETTERS, FORMATS, BOOKING_STATUS,
+  NEWSLETTERS, FORMATS, BOOKING_STATUS, METABOOKS_COVER_URL,
   isDayBlocked, isSlotFree, getSlotStatus, clientHasQuota, formatDate, toISODate,
 } from './config.js'
 
@@ -439,8 +439,8 @@ function updateCharCounter() {
   const text = document.getElementById('f-suggested-text').value
   const len = text.length
   const el = document.getElementById('char-counter')
-  el.textContent = `${len} / 500 caracteres`
-  el.className = 'char-counter ' + (len < 200 ? 'warn' : len > 500 ? 'error' : 'ok')
+  el.textContent = `${len} caracteres`
+  el.className = 'char-counter'
 }
 
 document.getElementById('f-suggested-text').addEventListener('input', updateCharCounter)
@@ -472,8 +472,7 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
   if (!format) return showErr(errEl, 'Selecione o formato do anúncio.')
   if (!campaignName) return showErr(errEl, 'Informe o título/nome da campanha.')
   if (!authorship) return showErr(errEl, 'Informe a autoria.')
-  if (suggestedText.length < 200) return showErr(errEl, `Texto muito curto (${suggestedText.length} chars). Mínimo 200 caracteres.`)
-  if (suggestedText.length > 500) return showErr(errEl, `Texto muito longo (${suggestedText.length} chars). Máximo 500 caracteres.`)
+  if (!suggestedText) return showErr(errEl, 'Informe o texto sugerido.')
   if (coverLink && !isValidUrl(coverLink)) return showErr(errEl, 'Link da capa inválido (deve começar com http).')
   if (redirectLink && !isValidUrl(redirectLink)) return showErr(errEl, 'Link de redirecionamento inválido (deve começar com http).')
 
@@ -750,7 +749,7 @@ function renderSheet(mode = 'calendar') {
         <option value="destaque" ${fmt === 'destaque' ? 'selected' : ''}>Destaque</option>
         <option value="corpo" ${fmt === 'corpo' ? 'selected' : ''}>Corpo</option>
       </select></td>
-      <td><input class="sh-input sh-text-col" data-field="suggested_text" value="${escHtml(booking?.suggested_text || '')}" placeholder="Texto do anúncio (200–500 caracteres)" /></td>
+      <td><input class="sh-input sh-text-col" data-field="suggested_text" value="${escHtml(booking?.suggested_text || '')}" placeholder="Texto do anúncio" /></td>
       <td><input class="sh-input sh-link-col" data-field="cover_link" value="${escHtml(booking?.cover_link || '')}" placeholder="https://..." /></td>
       <td><input class="sh-input sh-link-col" data-field="redirect_link" value="${escHtml(booking?.redirect_link || '')}" placeholder="https://..." /></td>
       <td class="sh-status-cell" id="sh-s-${idx}"></td>
@@ -784,7 +783,7 @@ function renderBlankSheet() {
         <option value="destaque">Destaque</option>
         <option value="corpo">Corpo</option>
       </select></td>
-      <td><input class="sh-input sh-text-col" data-field="suggested_text" placeholder="Texto do anúncio (200–500 caracteres)" /></td>
+      <td><input class="sh-input sh-text-col" data-field="suggested_text" placeholder="Texto do anúncio" /></td>
       <td><input class="sh-input sh-link-col" data-field="cover_link" placeholder="https://..." /></td>
       <td><input class="sh-input sh-link-col" data-field="redirect_link" placeholder="https://..." /></td>
       <td class="sh-status-cell" id="sh-s-${i}"></td>
@@ -1283,9 +1282,10 @@ function renderPackageForm(year, month) {
           ${dateVal ? formatDate(dateVal) : '📅 data'}
         </button>
       </td>
+      <td class="pkg-td-isbn"><input class="sh-input pkg-isbn" data-field="isbn" value="" placeholder="ISBN" /></td>
       <td class="pkg-td-camp"><input class="sh-input" data-field="campaign_name" value="${escHtml(campVal)}" placeholder="Título da campanha" /></td>
       <td class="pkg-td-auth"><input class="sh-input" data-field="authorship" value="${escHtml(authVal)}" placeholder="Autoria" /></td>
-      <td class="pkg-td-text"><input class="sh-input" data-field="suggested_text" value="${escHtml(textVal)}" placeholder="Texto do anúncio (200–500 chars)" /></td>
+      <td class="pkg-td-text"><input class="sh-input" data-field="suggested_text" value="${escHtml(textVal)}" placeholder="Texto do anúncio" /></td>
       <td class="pkg-td-link"><input class="sh-input" data-field="cover_link" value="${escHtml(capaVal)}" placeholder="https://..." /></td>
       <td class="pkg-td-link"><input class="sh-input" data-field="redirect_link" value="${escHtml(redirVal)}" placeholder="https://..." /></td>
       <td class="pkg-td-act">
@@ -1316,9 +1316,10 @@ function renderPackageForm(year, month) {
               <th class="pkg-th-num">#</th>
               <th>Slot</th>
               <th>Data</th>
+              <th>ISBN</th>
               <th>Campanha <span class="req">*</span></th>
               <th>Autoria <span class="req">*</span></th>
-              <th>Texto (200–500) <span class="req">*</span></th>
+              <th>Texto <span class="req">*</span></th>
               <th>Link da capa</th>
               <th>Link de redirecionamento</th>
               <th></th>
@@ -1358,12 +1359,43 @@ function renderPackageForm(year, month) {
   document.getElementById('pkg-body').addEventListener('input', updatePkgCounter)
   updatePkgCounter()
 
+  // ISBN auto-fill: ao sair do campo ISBN, busca dados do livro
+  document.querySelectorAll('#pkg-body .pkg-isbn').forEach(input => {
+    input.readOnly = false  // ISBN é editável diretamente
+    input.addEventListener('blur', async () => {
+      const isbn = input.value.replace(/[^0-9Xx]/g, '')
+      if (isbn.length !== 10 && isbn.length !== 13) return
+      const row = input.closest('.pkg-row')
+      if (!row) return
+
+      input.style.opacity = '0.5'
+      try {
+        const book = await getBookByISBN(isbn)
+        const setField = (field, val) => {
+          const el = row.querySelector(`[data-field="${field}"]`)
+          if (el && val && !el.value) el.value = val
+        }
+        if (book) {
+          setField('campaign_name', book.titulo)
+          setField('authorship', book.autor)
+          setField('suggested_text', book.sinopse)
+        }
+        // Sempre preencher capa via Metabooks (versão grande)
+        setField('cover_link', METABOOKS_COVER_URL(isbn))
+        updatePkgCounter()
+      } catch (e) {
+        console.warn('ISBN lookup failed:', e)
+      }
+      input.style.opacity = '1'
+    })
+  })
+
   // Popup de edição ao clicar nos inputs
   const FIELD_LABELS = {
     campaign_name: 'Campanha', authorship: 'Autoria',
     suggested_text: 'Texto do anúncio', cover_link: 'Link da capa', redirect_link: 'Link de redirecionamento',
   }
-  document.querySelectorAll('#pkg-body .sh-input').forEach(input => {
+  document.querySelectorAll('#pkg-body .sh-input:not(.pkg-isbn)').forEach(input => {
     input.readOnly = true
     input.addEventListener('click', () => {
       const field = input.dataset.field
@@ -1399,7 +1431,7 @@ function copyRowContent(srcIdx, dstIdx) {
   const dstRow = document.querySelector(`.pkg-row[data-row="${dstIdx}"]`)
   if (!srcRow || !dstRow) return
 
-  for (const f of ['campaign_name', 'authorship', 'suggested_text', 'cover_link', 'redirect_link']) {
+  for (const f of ['isbn', 'campaign_name', 'authorship', 'suggested_text', 'cover_link', 'redirect_link']) {
     const src = srcRow.querySelector(`[data-field="${f}"]`)
     const dst = dstRow.querySelector(`[data-field="${f}"]`)
     if (src && dst) dst.value = src.value

@@ -103,6 +103,14 @@ export async function deleteQuota(id) {
   return request(`/items/ad_quotas/${id}`, { method: 'DELETE' })
 }
 
+// ─── Biblioteca (busca por ISBN) ──────────────────────────────────────────────
+
+export async function getBookByISBN(isbn) {
+  const clean = isbn.replace(/[^0-9Xx]/g, '')
+  const results = await request(`/items/biblioteca?filter[isbn][_eq]=${clean}&fields=isbn,titulo,autor,editora,sinopse,capa_url&limit=1`)
+  return results?.[0] || null
+}
+
 // ─── Datas Bloqueadas ─────────────────────────────────────────────────────────
 
 export async function getBlockedDates() {

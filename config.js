@@ -4,6 +4,9 @@
 export const DIRECTUS_URL = 'https://directus-production-afdd.up.railway.app'
 export const SERVICE_TOKEN = '6ad00cdad8e44bd59e20e9897105b17d846ad6d81c27432faed5ddd8082a682e' // preenchido pelo setup
 
+export const METABOOKS_COVER_URL = (isbn) =>
+  `https://api.metabooks.com/api/v1/cover/${isbn}/l?access_token=c0f55cf9-c553-47ec-ac2f-8c4f4f57325c`
+
 export const FERIADOS_BR = [
   // 2025
   '2025-01-01', // Confraternização Universal
