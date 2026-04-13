@@ -7,7 +7,7 @@ import { FERIADOS_BR, BOOKING_STATUS, formatDate, toISODate } from './config.js'
 const session = requireAuth('/index.html')
 if (!session) throw new Error()
 if (session.role !== 'admin' && session.role !== 'redator') {
-  window.location.href = 'app.html'; throw new Error()
+  window.location.href = 'client.html'; throw new Error()
 }
 
 // ── Colunas ───────────────────────────────────────────────────────────────────

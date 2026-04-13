@@ -6,7 +6,7 @@ import { FERIADOS_BR, BOOKING_STATUS, formatDate, toISODate } from './config.js'
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const session = requireAuth('/index.html')
 if (!session) throw new Error()
-if (session.role !== 'anunciante') { window.location.href = 'app.html'; throw new Error() }
+if (session.role !== 'anunciante') { window.location.href = 'sheet.html'; throw new Error() }
 
 const clientId   = session.clientId
 const clientName = session.clientName || 'Anunciante'
