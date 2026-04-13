@@ -31,14 +31,23 @@
     .sheet-table-wrap { height: calc(100vh - 52px); margin-top: 52px; overflow: auto; }
 
     /* ── Table ── */
-    .sheet-table { border-collapse: collapse; table-layout: fixed; font-size: 13px; width: 100%; background: #fff; }
+    /* table-layout:fixed + largura calculada em JS — garante que as larguras das colunas
+       sejam respeitadas exatamente. A tabela transborda horizontalmente e o wrapper scrola. */
+    .sheet-table { border-collapse: collapse; table-layout: fixed; font-size: 13px; background: #fff; }
     .sheet-table thead { position: sticky; top: 0; z-index: 20; }
     .sheet-table th {
       background: #f6f8fa; border: 1px solid #d0d7de;
-      padding: 5px 8px; font-weight: 600; white-space: nowrap;
+      padding: 5px 8px; font-weight: 600; white-space: nowrap; overflow: hidden;
       text-align: left; font-size: 11px; color: #57606a;
       text-transform: uppercase; letter-spacing: .03em;
+      position: relative; user-select: none;
     }
+    /* Alça de redimensionamento de coluna */
+    .col-resizer {
+      position: absolute; right: 0; top: 0; bottom: 0; width: 4px;
+      cursor: col-resize; z-index: 1;
+    }
+    .col-resizer:hover, .col-resizer.active { background: #1a73e8; opacity: .6; }
     .sheet-table td {
       border: 1px solid #e8ecf0; padding: 0; vertical-align: middle;
       height: 30px; cursor: default; position: relative;
@@ -77,6 +86,14 @@
       display: block;
     }
     select.cell-ed { cursor: pointer; background: #fff; }
+
+    /* Link clicável dentro de célula */
+    .cell-link {
+      color: #1a73e8; text-decoration: none; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+      display: block;
+    }
+    .cell-link:hover { text-decoration: underline; }
 
     /* Status badge */
     .s-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; white-space: nowrap; }

@@ -23,8 +23,8 @@ const COLS = [
   { key: 'suggested_text',     label: 'Texto Sugerido',     w: 160, type: 'longtext' },
   { key: 'extra_info',         label: 'Informações Extras', w: 160, type: 'longtext' },
   { key: 'promotional_period', label: 'Período Promo',      w: 138, type: 'text' },
-  { key: 'cover_link',         label: 'Link da Capa',       w: 190, type: 'text' },
-  { key: 'redirect_link',      label: 'Link Redirect',      w: 190, type: 'text' },
+  { key: 'cover_link',         label: 'Link da Capa',       w: 190, type: 'link' },
+  { key: 'redirect_link',      label: 'Link Redirect',      w: 190, type: 'link' },
 ]
 const DATE_CI     = COLS.findIndex(c => c.type === 'date')
 const EDITABLE_CI = COLS.map((c,i) => c.type !== 'badge' ? i : -1).filter(i => i >= 0)
@@ -39,6 +39,7 @@ let dpRi      = null    // índice da linha com datepicker aberto
 let dpDate    = new Date()
 let tpRi      = null    // índice da linha com popup de texto aberto
 let tpCi      = null    // índice da coluna com popup de texto aberto
+let resizing  = null    // { ci, startX, startW, el } — resize de coluna em curso
 let newCnt    = 0
 
 // ── DOM ───────────────────────────────────────────────────────────────────────
@@ -75,6 +76,23 @@ document.addEventListener('mousedown', e => {
   if (tpRi !== null && !$tp.contains(e.target)) hideTextPopup()
 }, true)
 
+// ── Resize de coluna ─────────────────────────────────────────────────────────
+document.addEventListener('mousemove', e => {
+  if (!resizing) return
+  const dx    = e.clientX - resizing.startX
+  const newW  = Math.max(40, resizing.startW + dx)
+  COLS[resizing.ci].w = newW
+  const ths = $thead.querySelectorAll('th')
+  const th  = ths[resizing.ci + 1]   // +1 por causa do col-rn
+  if (th) th.style.width = newW + 'px'
+  updateTableWidth()
+})
+document.addEventListener('mouseup', () => {
+  if (!resizing) return
+  resizing.el.classList.remove('active')
+  resizing = null
+})
+
 // Fecha popups com Escape
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
@@ -110,10 +128,31 @@ function buildThead() {
   $thead.innerHTML = ''
   const tr = document.createElement('tr')
   mkTh(tr, '', 'col-rn')
-  COLS.forEach(c => { const th = mkTh(tr, c.label); th.style.width = c.w + 'px' })
+  COLS.forEach((c, ci) => {
+    const th = mkTh(tr, c.label)
+    th.style.width = c.w + 'px'
+    // Alça de redimensionamento — igual ao Google Sheets
+    const rz = document.createElement('div')
+    rz.className = 'col-resizer'
+    rz.addEventListener('mousedown', e => {
+      e.preventDefault(); e.stopPropagation()
+      resizing = { ci, startX: e.clientX, startW: c.w, el: rz }
+      rz.classList.add('active')
+    })
+    th.appendChild(rz)
+  })
   mkTh(tr, '', 'col-act')
   $thead.appendChild(tr)
+  updateTableWidth()
 }
+
+function updateTableWidth() {
+  // Com table-layout:fixed, a largura da tabela deve ser explicitamente o total
+  // das colunas — assim as larguras são respeitadas e o wrapper rola horizontalmente
+  const total = 36 + 32 + COLS.reduce((s, c) => s + c.w, 0)
+  $table.style.width = Math.max(total, $table.parentElement?.clientWidth ?? 0) + 'px'
+}
+
 function mkTh(tr, txt, cls) {
   const th = document.createElement('th')
   th.textContent = txt; if (cls) th.className = cls
@@ -158,16 +197,9 @@ function buildTd(row, ri, col, ci) {
     sp.textContent = cfg.label; sp.style.cssText = `background:${cfg.bg};color:${cfg.color}`
     wrap.appendChild(sp); td.appendChild(wrap)
   } else {
-    const disp = document.createElement('div')
-    disp.className   = 'cell-disp'
-    disp.textContent = dispVal(col, row[col.key])
-    td.appendChild(disp)
-    // mousedown abre o editor.
-    // Não chamamos preventDefault em nenhum caso para que o browser posicione
-    // o cursor normalmente (seleção de texto, drag-to-select, clique para mover cursor).
-    // O único efeito colateral (td receber foco visual) não ocorre pois td não é focusável.
+    td.appendChild(buildDisp(col, row[col.key]))
     td.addEventListener('mousedown', e => {
-      if (e.target.closest('.cell-ed')) return   // editor já aberto: browser cuida de tudo
+      if (e.target.closest('.cell-ed, .cell-link')) return
       activateCell(ri, ci)
     })
   }
@@ -179,6 +211,24 @@ function dispVal(col, val) {
   if (col.type === 'sel')  return (col.opts.find(([v]) => v === val)||[])[1] || val
   if (col.type === 'date') return formatDate(val)
   return val
+}
+
+// Cria o div de display para uma célula (suporta link clicável)
+function buildDisp(col, val) {
+  const disp = document.createElement('div')
+  disp.className = 'cell-disp'
+  if (col.type === 'link' && val) {
+    const a = document.createElement('a')
+    a.href      = /^https?:\/\//i.test(val) ? val : 'https://' + val
+    a.target    = '_blank'
+    a.rel       = 'noopener noreferrer'
+    a.className = 'cell-link'
+    a.textContent = val
+    disp.appendChild(a)
+  } else {
+    disp.textContent = dispVal(col, val)
+  }
+  return disp
 }
 
 function rowKey(row) { return String(row.id || row._tid) }
@@ -413,9 +463,7 @@ function closeCell(ri, ci) {
   const td = getTd(ri, ci); if (!td) return
   const col = COLS[ci]
   td.innerHTML = ''
-  const disp = document.createElement('div'); disp.className = 'cell-disp'
-  disp.textContent = dispVal(col, rows[ri]?.[col.key])
-  td.appendChild(disp)
+  td.appendChild(buildDisp(col, rows[ri]?.[col.key]))
   // Nota: NÃO re-adiciona mousedown — o listener original do buildTd permanece no td
 }
 
@@ -428,9 +476,7 @@ function handleKey(e, ri, ci) {
     active = null; activeKey = null
     const td = getTd(ri, ci); if (!td) return
     td.innerHTML = ''
-    const disp = document.createElement('div'); disp.className = 'cell-disp'
-    disp.textContent = dispVal(col, rows[ri]?.[col.key])
-    td.appendChild(disp)
+    td.appendChild(buildDisp(col, rows[ri]?.[col.key]))
     return
   }
 
