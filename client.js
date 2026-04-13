@@ -20,8 +20,8 @@ const COLS = [
   { key: 'campaign_name',      label: 'Nome da Campanha',   w: 220, type: 'text' },
   { key: 'authorship',         label: 'Autoria',            w: 158, type: 'text' },
   { key: 'isbn',               label: 'ISBN',               w: 120, type: 'text' },
-  { key: 'suggested_text',     label: 'Texto Sugerido',     w: 60, wu: 'ch', type: 'longtext' },
-  { key: 'extra_info',         label: 'Informações Extras', w: 60, wu: 'ch', type: 'longtext' },
+  { key: 'suggested_text',     label: 'Texto Sugerido',     w: 160, type: 'longtext' },
+  { key: 'extra_info',         label: 'Informações Extras', w: 160, type: 'longtext' },
   { key: 'promotional_period', label: 'Período Promo',      w: 138, type: 'text' },
   { key: 'cover_link',         label: 'Link da Capa',       w: 190, type: 'text' },
   { key: 'redirect_link',      label: 'Link Redirect',      w: 190, type: 'text' },
@@ -110,7 +110,7 @@ function buildThead() {
   $thead.innerHTML = ''
   const tr = document.createElement('tr')
   mkTh(tr, '', 'col-rn')
-  COLS.forEach(c => { const th = mkTh(tr, c.label); const w = c.w + (c.wu || 'px'); th.style.minWidth = th.style.width = w })
+  COLS.forEach(c => { const th = mkTh(tr, c.label); th.style.width = c.w + 'px' })
   mkTh(tr, '', 'col-act')
   $thead.appendChild(tr)
 }
