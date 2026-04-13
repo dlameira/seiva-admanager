@@ -34,6 +34,7 @@ let rows      = []
 let blocked   = []
 let dirty     = new Set()
 let active    = null    // { ri, ci } — célula com editor inline (não-data)
+let activeGen = 0       // incrementa a cada abertura; invalida timers de blur antigos
 let activeKey = null    // rowKey da linha destacada
 let dpRi      = null    // índice da linha com datepicker aberto
 let dpDate    = new Date()
@@ -428,6 +429,7 @@ function activateCell(ri, ci) {
 
   active    = { ri, ci }
   activeKey = rowKey(rows[ri])
+  const gen = ++activeGen
 
   // Destaca linha
   document.querySelectorAll('.sheet-row').forEach(tr => tr.classList.remove('row-active'))
@@ -453,7 +455,8 @@ function activateCell(ri, ci) {
 
   ed.addEventListener('keydown', e => handleKey(e, ri, ci))
   ed.addEventListener('blur', () => setTimeout(() => {
-    if (active?.ri === ri && active?.ci === ci) closeCell(ri, ci)
+    // Só fecha se este timer ainda corresponde à abertura mais recente
+    if (active?.ri === ri && active?.ci === ci && activeGen === gen) closeCell(ri, ci)
   }, 120))
 
   td.appendChild(ed)
