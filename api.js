@@ -2,7 +2,7 @@
 import { DIRECTUS_URL, SERVICE_TOKEN } from './config.js'
 import { getSession, refreshToken, logout } from './auth.js'
 
-async function request(path, options = {}) {
+async function request(path, options = {}, _retried = false) {
   const session = getSession()
   const token = session?.accessToken
   if (!token) { logout(); return null }
@@ -17,10 +17,15 @@ async function request(path, options = {}) {
     body: options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined,
   })
 
-  // Token expirado: tenta refresh
-  if (res.status === 401 && session?.refreshToken) {
+  // Token expirado: tenta refresh uma única vez
+  if (res.status === 401 && !_retried && session?.refreshToken) {
     const refreshed = await refreshToken()
-    if (refreshed) return request(path, options)
+    if (refreshed) return request(path, options, true)
+    logout()
+    return null
+  }
+
+  if (res.status === 401) {
     logout()
     return null
   }
