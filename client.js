@@ -200,6 +200,11 @@ function buildTd(row, ri, col, ci) {
     td.appendChild(buildDisp(col, row[col.key]))
     td.addEventListener('mousedown', e => {
       if (e.target.closest('.cell-ed, .cell-link')) return
+      // Impede que o browser redirecione o foco para o body ao clicar num td
+      // não-focusável, o que causaria blur imediato no input recém-criado.
+      // Não chamamos quando o alvo já é o input (.cell-ed), para que o browser
+      // posicione o cursor normalmente dentro do campo aberto.
+      e.preventDefault()
       activateCell(ri, ci)
     })
   }
