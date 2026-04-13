@@ -16,6 +16,8 @@ if (!session) throw new Error('Not authenticated')
 const isAdmin = session.role === 'admin'
 const isRedator = session.role === 'redator'
 const isAnunciante = session.role === 'anunciante'
+// Anunciantes têm interface própria em client.html
+if (isAnunciante) { window.location.href = 'client.html'; throw new Error('redirect') }
 const canEdit = isAdmin || isRedator
 const canBook = isAdmin || isAnunciante
 

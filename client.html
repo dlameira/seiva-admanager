@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seiva Ads</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #1c2128; height: 100vh; overflow: hidden; }
+
+    /* ── Header ── */
+    .sheet-header {
+      height: 52px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px; background: #fff; border-bottom: 1px solid #d0d7de;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100; gap: 12px;
+    }
+    .header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .header-logo { font-weight: 700; font-size: 16px; color: #38a832; letter-spacing: -0.3px; white-space: nowrap; }
+    .header-sep { color: #d0d7de; font-size: 18px; }
+    .header-client { font-size: 14px; color: #444; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .save-indicator { font-size: 12px; color: #8c959f; white-space: nowrap; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 6px; border: 1px solid #d0d7de; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 500; transition: background 0.15s; }
+    .btn-primary { background: #38a832; color: #fff; border-color: #38a832; }
+    .btn-primary:hover:not(:disabled) { background: #2e8f29; }
+    .btn-primary:disabled { opacity: 0.45; cursor: default; }
+    .btn-ghost { background: none; color: #444; }
+    .btn-ghost:hover { background: #f6f8fa; }
+
+    /* ── Layout ── */
+    .sheet-layout { display: flex; height: calc(100vh - 52px); margin-top: 52px; }
+    .sheet-table-wrap { flex: 1; overflow: auto; min-width: 0; }
+    .sheet-sidebar { width: 268px; min-width: 268px; border-left: 1px solid #e2e8f0; overflow-y: auto; padding: 16px; background: #fafbfc; }
+
+    /* ── Table ── */
+    .sheet-table { border-collapse: collapse; font-size: 13px; min-width: 100%; background: white; }
+    .sheet-table thead { position: sticky; top: 0; z-index: 20; }
+    .sheet-table th {
+      background: #f6f8fa; border: 1px solid #d0d7de;
+      padding: 5px 8px; font-weight: 600; white-space: nowrap;
+      text-align: left; font-size: 11px; color: #57606a; text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    .sheet-table td { border: 1px solid #e2e8f0; padding: 0; vertical-align: middle; height: 32px; }
+    .col-rn { width: 36px !important; min-width: 36px; background: #f6f8fa !important; color: #8c959f; font-size: 11px; text-align: right; padding: 0 6px !important; border-right: 2px solid #d0d7de !important; user-select: none; }
+    .col-act { width: 32px; min-width: 32px; text-align: center; }
+
+    /* Row states */
+    .sheet-row:hover td { background: #f6f8fa; }
+    .sheet-row.row-active td { background: #f0f6ff !important; }
+    .sheet-row.state-dirty .col-rn { box-shadow: inset 3px 0 0 #f59e0b; color: #b45309; }
+    .sheet-row.state-new .col-rn { box-shadow: inset 3px 0 0 #22c55e; color: #15803d; }
+    .sheet-row.state-locked td { background: #fafafa; }
+
+    /* Cell inputs */
+    .cell-inp {
+      width: 100%; height: 32px; padding: 0 7px;
+      border: none; outline: none; background: transparent;
+      font-size: 13px; font-family: inherit; color: #1c2128;
+    }
+    .cell-inp:focus { background: #fff; box-shadow: inset 0 0 0 2px #0969da; z-index: 1; position: relative; }
+    .cell-sel {
+      width: 100%; height: 32px; padding: 0 4px;
+      border: none; outline: none; background: transparent;
+      font-size: 13px; font-family: inherit; cursor: pointer; color: #1c2128;
+    }
+    .cell-sel:focus { background: white; box-shadow: inset 0 0 0 2px #0969da; }
+    .cell-ro { padding: 0 7px; height: 32px; display: flex; align-items: center; color: #57606a; font-size: 13px; overflow: hidden; }
+    .state-locked .cell-inp, .state-locked .cell-sel { pointer-events: none; color: #57606a; }
+
+    /* Status badge */
+    .s-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+
+    /* Delete button */
+    .btn-del { background: none; border: none; cursor: pointer; padding: 4px 6px; opacity: 0; font-size: 13px; color: #b91c1c; }
+    .sheet-row:hover .btn-del { opacity: 0.5; }
+    .btn-del:hover { opacity: 1 !important; }
+
+    /* Add row */
+    .add-row-bar { padding: 8px 16px; border-top: 1px solid #e2e8f0; background: white; position: sticky; bottom: 0; }
+    .btn-add-row { border: 1px dashed #94a3b8; background: none; color: #64748b; padding: 5px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: inherit; }
+    .btn-add-row:hover { background: #f1f5f9; border-color: #475569; color: #334155; }
+
+    /* Loading */
+    #sheet-loading { padding: 48px; text-align: center; color: #8c959f; font-size: 14px; }
+
+    /* ── Mini Calendar ── */
+    .cal-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .cal-title { font-weight: 600; font-size: 13px; color: #1c2128; }
+    .cal-nav { background: none; border: 1px solid #d0d7de; border-radius: 4px; padding: 1px 8px; cursor: pointer; font-size: 15px; color: #444; line-height: 1.6; }
+    .cal-nav:hover { background: #f0f0f0; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+    .cal-wd { text-align: center; font-size: 10px; font-weight: 600; color: #8c959f; padding: 3px 0; }
+    .cal-d {
+      aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; border-radius: 4px; position: relative; transition: background 0.1s;
+    }
+    .cal-d.clickable { cursor: pointer; }
+    .cal-d.clickable:hover { background: #dbeafe; }
+    .cal-d.blocked { background: #f1f5f9 !important; color: #b0b7c3 !important; text-decoration: line-through; cursor: default; }
+    .cal-d.taken { background: #fef9c3; color: #92400e; }
+    .cal-d.free { background: #f0fdf4; }
+    .cal-d.own::after { content: ''; position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; background: #c0306a; border-radius: 50%; }
+    .cal-d.today { font-weight: 700; outline: 2px solid #0969da; outline-offset: -2px; }
+    .cal-d.sel { background: #dbeafe !important; font-weight: 700; }
+    .cal-legend { margin-top: 12px; display: flex; flex-direction: column; gap: 5px; }
+    .leg { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #6e7681; }
+    .leg-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+    .cal-hint { margin-top: 12px; font-size: 11px; color: #8c959f; font-style: italic; line-height: 1.5; min-height: 32px; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: #1c2128; color: white; padding: 9px 18px; border-radius: 8px; font-size: 13px; z-index: 9999; transition: transform 0.25s ease; pointer-events: none; }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.err { background: #b91c1c; }
+    .toast.ok  { background: #15803d; }
+  </style>
+</head>
+<body>
+  <header class="sheet-header">
+    <div class="header-left">
+      <span class="header-logo">Seiva Ads</span>
+      <span class="header-sep">/</span>
+      <span class="header-client" id="client-name">…</span>
+    </div>
+    <div class="header-right">
+      <span class="save-indicator" id="save-ind"></span>
+      <button class="btn btn-primary" id="btn-save" disabled>Salvar</button>
+      <button class="btn btn-ghost" id="btn-logout">Sair</button>
+    </div>
+  </header>
+
+  <div class="sheet-layout">
+    <div class="sheet-table-wrap">
+      <div id="sheet-loading">Carregando…</div>
+      <table class="sheet-table" id="sheet-table" style="display:none">
+        <thead id="sheet-thead"></thead>
+        <tbody id="sheet-tbody"></tbody>
+      </table>
+      <div class="add-row-bar" id="add-row-bar" style="display:none">
+        <button class="btn-add-row" id="btn-add">+ Adicionar linha</button>
+      </div>
+    </div>
+
+    <aside class="sheet-sidebar">
+      <div class="cal-hd">
+        <button class="cal-nav" id="cal-prev">‹</button>
+        <span class="cal-title" id="cal-title"></span>
+        <button class="cal-nav" id="cal-next">›</button>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+      <div class="cal-legend">
+        <div class="leg"><span class="leg-dot" style="background:#c0306a;border-radius:50%"></span>Seu anúncio</div>
+        <div class="leg"><span class="leg-dot" style="background:#fef9c3;border:1px solid #d97706"></span>Slot ocupado</div>
+        <div class="leg"><span class="leg-dot" style="background:#f1f5f9;border:1px solid #d0d7de"></span>Bloqueado / fds</div>
+      </div>
+      <div class="cal-hint" id="cal-hint">Selecione uma linha para ver disponibilidade</div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script type="module" src="client.js"></script>
+</body>
+</html>

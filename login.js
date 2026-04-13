@@ -3,7 +3,7 @@ import { loginUnified, getSession } from './auth.js'
 
 // Se já está logado, redireciona
 const session = getSession()
-if (session) window.location.href = 'app.html'
+if (session) window.location.href = session.role === 'anunciante' ? 'client.html' : 'app.html'
 
 function setLoading(btn, loading) {
   btn.disabled = loading
@@ -28,8 +28,8 @@ document.getElementById('form-login').addEventListener('submit', async e => {
   hideError(errEl)
   setLoading(btn, true)
   try {
-    await loginUnified(username, password)
-    window.location.href = 'app.html'
+    const result = await loginUnified(username, password)
+    window.location.href = result.role === 'anunciante' ? 'client.html' : 'app.html'
   } catch (err) {
     showError(errEl, err.message || 'Usuário ou senha inválidos.')
     setLoading(btn, false)
