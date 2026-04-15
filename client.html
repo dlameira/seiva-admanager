@@ -6,26 +6,46 @@
   <title>Seiva Ads</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #1c2128; height: 100vh; overflow: hidden; }
+
+    /* ── Temas (CSS Variables) ── */
+    :root {
+      --bg: #fff; --bg-alt: #f6faf6; --bg-alt-hover: #eef5ee;
+      --bg-header: #fff; --bg-th: #f6f8fa; --bg-hover: #f9fafb;
+      --bg-active: #f0f6ff; --bg-input: transparent; --bg-popup: #fff;
+      --text: #1c2128; --text-sec: #444; --text-dim: #57606a; --text-muted: #8c959f;
+      --border: #d0d7de; --border-cell: #e8ecf0;
+      --logo: #38a832; --btn-bg: #38a832; --btn-hover: #2e8f29;
+    }
+    html.dark {
+      --bg: #161b22; --bg-alt: #1c2333; --bg-alt-hover: #253040;
+      --bg-header: #0d1117; --bg-th: #1c2128; --bg-hover: #1c2533;
+      --bg-active: #1a2744; --bg-input: #0d1117; --bg-popup: #1c2128;
+      --text: #e6edf3; --text-sec: #c9d1d9; --text-dim: #8b949e; --text-muted: #6e7681;
+      --border: #30363d; --border-cell: #21262d;
+      --logo: #4ac244; --btn-bg: #2ea043; --btn-hover: #3fb950;
+    }
+
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
 
     /* ── Header ── */
     .sheet-header {
       height: 52px; display: flex; align-items: center; justify-content: space-between;
-      padding: 0 16px; background: #fff; border-bottom: 1px solid #d0d7de;
+      padding: 0 16px; background: var(--bg-header); border-bottom: 1px solid var(--border);
       position: fixed; top: 0; left: 0; right: 0; z-index: 100; gap: 12px;
     }
     .header-left  { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .header-logo  { font-weight: 700; font-size: 16px; color: #38a832; letter-spacing: -0.3px; white-space: nowrap; }
-    .header-sep   { color: #d0d7de; font-size: 18px; }
-    .header-client{ font-size: 14px; color: #444; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .header-logo  { font-weight: 700; font-size: 16px; color: var(--logo); letter-spacing: -0.3px; white-space: nowrap; }
+    .header-sep   { color: var(--border); font-size: 18px; }
+    .header-client{ font-size: 14px; color: var(--text-sec); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-    .save-indicator{ font-size: 12px; color: #8c959f; white-space: nowrap; }
-    .btn { display: inline-flex; align-items: center; padding: 5px 14px; border-radius: 6px; border: 1px solid #d0d7de; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 500; transition: background .15s; }
-    .btn-primary  { background: #38a832; color: #fff; border-color: #38a832; }
-    .btn-primary:hover:not(:disabled) { background: #2e8f29; }
+    .save-indicator{ font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+    .btn { display: inline-flex; align-items: center; padding: 5px 14px; border-radius: 6px; border: 1px solid var(--border); font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 500; transition: background .15s; color: var(--text); }
+    .btn-primary  { background: var(--btn-bg); color: #fff; border-color: var(--btn-bg); }
+    .btn-primary:hover:not(:disabled) { background: var(--btn-hover); }
     .btn-primary:disabled { opacity: .45; cursor: default; }
-    .btn-ghost    { background: none; color: #444; }
-    .btn-ghost:hover { background: #f6f8fa; }
+    .btn-ghost    { background: none; color: var(--text-sec); }
+    .btn-ghost:hover { background: var(--bg-hover); }
+    .btn-theme { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 15px; line-height: 1; }
 
     /* ── Layout ── */
     .sheet-table-wrap { height: calc(100vh - 52px); margin-top: 52px; overflow: auto; }
@@ -33,12 +53,12 @@
     /* ── Table ── */
     /* table-layout:fixed + largura calculada em JS — garante que as larguras das colunas
        sejam respeitadas exatamente. A tabela transborda horizontalmente e o wrapper scrola. */
-    .sheet-table { border-collapse: collapse; table-layout: fixed; font-size: 13px; background: #fff; }
+    .sheet-table { border-collapse: collapse; table-layout: fixed; font-size: 13px; background: var(--bg); }
     .sheet-table thead { position: sticky; top: 0; z-index: 20; }
     .sheet-table th {
-      background: #f6f8fa; border: 1px solid #d0d7de;
+      background: var(--bg-th); border: 1px solid var(--border);
       padding: 5px 8px; font-weight: 600; white-space: nowrap; overflow: hidden;
-      text-align: left; font-size: 11px; color: #57606a;
+      text-align: left; font-size: 11px; color: var(--text-dim);
       text-transform: uppercase; letter-spacing: .03em;
       position: relative; user-select: none;
     }
@@ -49,21 +69,23 @@
     }
     .col-resizer:hover, .col-resizer.active { background: #1a73e8; opacity: .6; }
     .sheet-table td {
-      border: 1px solid #e8ecf0; padding: 0; vertical-align: middle;
+      border: 1px solid var(--border-cell); padding: 0; vertical-align: middle;
       height: 30px; cursor: default; position: relative;
     }
-    .col-rn  { width: 36px; min-width: 36px; background: #f6f8fa !important; color: #8c959f; font-size: 11px; text-align: right; padding: 0 6px !important; border-right: 2px solid #d0d7de !important; user-select: none; }
+    .col-rn  { width: 36px; min-width: 36px; background: var(--bg-th) !important; color: var(--text-muted); font-size: 11px; text-align: right; padding: 0 6px !important; border-right: 2px solid var(--border) !important; user-select: none; }
     .col-act { width: 32px; min-width: 32px; text-align: center; }
 
-    .sheet-row:hover td          { background: #f9fafb; }
-    .sheet-row.row-active td     { background: #f0f6ff !important; }
+    .sheet-row:hover td          { background: var(--bg-hover); }
+    .sheet-row.row-active td     { background: var(--bg-active) !important; }
     .sheet-row.row-dirty .col-rn { box-shadow: inset 3px 0 0 #f59e0b; }
+    .sheet-row.week-alt td       { background: var(--bg-alt); }
+    .sheet-row.week-alt:hover td { background: var(--bg-alt-hover); }
 
     /* Célula: modo display */
     .cell-disp {
       padding: 0 7px; height: 30px; display: flex; align-items: center;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      cursor: cell; user-select: none; color: #1c2128; font-size: 13px;
+      cursor: cell; user-select: none; color: var(--text); font-size: 13px;
     }
 
     /* Célula: modo edição */
@@ -77,18 +99,18 @@
       outline: 2px solid #1a73e8;
       outline-offset: -1px;
       z-index: 5;
-      background: #f0f6ff !important;
+      background: var(--bg-active) !important;
     }
     .cell-ed {
       width: 100%; height: 30px; padding: 0 6px;
-      border: none; outline: none; background: transparent;
-      font-size: 13px; font-family: inherit; color: #1c2128;
+      border: none; outline: none; background: var(--bg-input);
+      font-size: 13px; font-family: inherit; color: var(--text);
       display: block;
     }
-    select.cell-ed { cursor: pointer; background: #fff; }
+    select.cell-ed { cursor: pointer; background: var(--bg); }
 
     /* Campo somente-leitura */
-    .cell-readonly { cursor: default !important; color: #57606a; }
+    .cell-readonly { cursor: default !important; color: var(--text-dim); }
 
     /* Link clicável dentro de célula */
     .cell-link {
@@ -110,25 +132,25 @@
     .btn-del:hover { opacity: 1 !important; }
 
     /* Barra adicionar */
-    .add-row-bar { padding: 7px 16px; border-top: 1px solid #e2e8f0; background: #fff; position: sticky; bottom: 0; }
-    .btn-add-row { border: 1px dashed #94a3b8; background: none; color: #64748b; padding: 5px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: inherit; }
-    .btn-add-row:hover { background: #f1f5f9; border-color: #475569; color: #334155; }
+    .add-row-bar { padding: 7px 16px; border-top: 1px solid var(--border); background: var(--bg); position: sticky; bottom: 0; }
+    .btn-add-row { border: 1px dashed var(--text-muted); background: none; color: var(--text-dim); padding: 5px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: inherit; }
+    .btn-add-row:hover { background: var(--bg-hover); border-color: var(--text-sec); color: var(--text); }
 
     /* Loading */
-    #sheet-loading { padding: 56px; text-align: center; color: #8c959f; font-size: 14px; }
+    #sheet-loading { padding: 56px; text-align: center; color: var(--text-muted); font-size: 14px; }
 
     /* ── Datepicker flutuante ── */
     .datepicker {
-      position: fixed; background: #fff; border: 1px solid #d0d7de;
-      border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.14);
+      position: fixed; background: var(--bg-popup); border: 1px solid var(--border);
+      border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.25);
       padding: 10px; z-index: 400; width: 230px; user-select: none;
     }
     .dp-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-    .dp-title { font-weight: 600; font-size: 13px; color: #1c2128; }
-    .dp-nav { background: none; border: 1px solid #d0d7de; border-radius: 4px; padding: 1px 9px; cursor: pointer; font-size: 15px; color: #444; line-height: 1.6; }
-    .dp-nav:hover { background: #f0f0f0; }
+    .dp-title { font-weight: 600; font-size: 13px; color: var(--text); }
+    .dp-nav { background: none; border: 1px solid var(--border); border-radius: 4px; padding: 1px 9px; cursor: pointer; font-size: 15px; color: var(--text-sec); line-height: 1.6; }
+    .dp-nav:hover { background: var(--bg-hover); }
     .dp-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 1px; }
-    .dp-wd { text-align: center; font-size: 10px; font-weight: 600; color: #8c959f; padding: 3px 0; }
+    .dp-wd { text-align: center; font-size: 10px; font-weight: 600; color: var(--text-muted); padding: 3px 0; }
     .dp-d {
       aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
       font-size: 12px; border-radius: 4px; transition: background .1s;
@@ -141,19 +163,20 @@
 
     /* ── Popup de texto longo ── */
     .text-popup {
-      position: fixed; background: #fff; border: 1px solid #d0d7de;
-      border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.14);
+      position: fixed; background: var(--bg-popup); border: 1px solid var(--border);
+      border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.25);
       padding: 10px; z-index: 400; width: 380px;
     }
     .tp-label {
-      font-size: 11px; font-weight: 600; color: #57606a;
+      font-size: 11px; font-weight: 600; color: var(--text-dim);
       text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px;
     }
     .tp-area {
       display: block; width: 100%; min-height: 100px; max-height: 300px;
-      border: 1px solid #d0d7de; border-radius: 4px;
+      border: 1px solid var(--border); border-radius: 4px;
       padding: 6px 8px; font-size: 13px; font-family: inherit;
-      color: #1c2128; line-height: 1.5; resize: vertical; outline: none;
+      color: var(--text); line-height: 1.5; resize: vertical; outline: none;
+      background: var(--bg);
     }
     .tp-area:focus { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,.15); }
 
@@ -174,6 +197,7 @@
     <div class="header-right">
       <span class="save-indicator" id="save-ind"></span>
       <button class="btn btn-primary" id="btn-save" disabled>Salvar</button>
+      <button class="btn-theme" id="btn-theme" title="Alternar tema">&#9790;</button>
       <button class="btn btn-ghost"   id="btn-logout">Sair</button>
     </div>
   </header>

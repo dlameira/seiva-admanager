@@ -17,13 +17,13 @@ const COLS = [
   { key: 'newsletter',         label: 'Newsletter',         w:  96, type: 'sel', opts: [['aurora','Aurora'],['indice','Índice']], readonly: true },
   { key: 'format',             label: 'Formato',            w: 120, type: 'sel', opts: [['destaque','Destaque'],['corpo','Corpo do Email']], readonly: true },
   { key: 'status',             label: 'Status',             w: 130, type: 'status' },
+  { key: 'isbn',               label: 'ISBN',               w: 120, type: 'text' },
   { key: 'campaign_name',      label: 'Nome da Campanha',   w: 220, type: 'text' },
   { key: 'authorship',         label: 'Autoria',            w: 158, type: 'text' },
-  { key: 'isbn',               label: 'ISBN',               w: 120, type: 'text' },
-  { key: 'suggested_text',     label: 'Texto Sugerido',     w: 160, type: 'longtext' },
+  { key: 'suggested_text',     label: 'Texto',              w: 160, type: 'longtext' },
   { key: 'extra_info',         label: 'Informações Extras', w: 160, type: 'longtext' },
   { key: 'promotional_period', label: 'Período Promo',      w: 138, type: 'text' },
-  { key: 'cover_link',         label: 'Link da Capa',       w: 190, type: 'link' },
+  { key: 'cover_link',         label: 'Imagem',             w: 190, type: 'link' },
   { key: 'redirect_link',      label: 'Link Redirect',      w: 190, type: 'link' },
 ]
 const DATE_CI     = COLS.findIndex(c => c.type === 'date')
@@ -67,6 +67,17 @@ $name.textContent = clientName
 document.getElementById('btn-logout').addEventListener('click', logout)
 $save.addEventListener('click', saveAll)
 document.getElementById('btn-add').addEventListener('click', addRow)
+
+// ── Dark mode toggle ────────────────────────────────────────────────────────
+const $theme = document.getElementById('btn-theme')
+if (localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark')
+$theme.textContent = document.documentElement.classList.contains('dark') ? '\u2600' : '\u263E'
+$theme.addEventListener('click', () => {
+  document.documentElement.classList.toggle('dark')
+  const isDark = document.documentElement.classList.contains('dark')
+  localStorage.setItem('theme', isDark ? 'dark' : 'light')
+  $theme.textContent = isDark ? '\u2600' : '\u263E'
+})
 
 // Navegação do datepicker
 document.getElementById('dp-prev').addEventListener('mousedown', e => e.stopPropagation())
@@ -196,16 +207,33 @@ function mkTh(tr, txt, cls) {
   tr.appendChild(th); return th
 }
 
+// ── Semana ISO (para alternar cores) ─────────────────────────────────────────
+function isoWeek(dateStr) {
+  if (!dateStr) return -1
+  const d = new Date(dateStr + 'T12:00:00')
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7))
+  const jan1 = new Date(d.getFullYear(), 0, 1)
+  return Math.ceil((((d - jan1) / 86400000) + 1) / 7)
+}
+
 // ── Linhas ────────────────────────────────────────────────────────────────────
 function buildTbody() {
   $tbody.innerHTML = ''
-  rows.forEach((row, ri) => $tbody.appendChild(buildTr(row, ri)))
+  // Calcula alternância de cor por semana
+  let weekIdx = 0, lastWeek = null
+  rows.forEach((row, ri) => {
+    const wk = isoWeek(row.date)
+    if (wk !== lastWeek && lastWeek !== null) weekIdx++
+    lastWeek = wk
+    $tbody.appendChild(buildTr(row, ri, weekIdx % 2 === 1))
+  })
 }
 
-function buildTr(row, ri) {
+function buildTr(row, ri, altWeek) {
   const tr = document.createElement('tr')
   tr.className  = 'sheet-row'
   tr.dataset.ri = ri
+  if (altWeek) tr.classList.add('week-alt')
   if (dirty.has(rowKey(row))) tr.classList.add('row-dirty')
   if (activeKey === rowKey(row)) tr.classList.add('row-active')
 
