@@ -1,7 +1,7 @@
 // sheet.js — Planilha admin unificada (todos os clientes)
 import { requireAuth, logout } from './auth.js'
-import { getBookings, updateBooking, deleteBooking, getClients, getBlockedDates } from './api.js'
-import { FERIADOS_BR, BOOKING_STATUS, formatDate, toISODate } from './config.js'
+import { getBookings, updateBooking, deleteBooking, getClients, getBlockedDates, getBookByISBN } from './api.js'
+import { FERIADOS_BR, BOOKING_STATUS, METABOOKS_COVER_URL, formatDate, toISODate } from './config.js'
 
 // ── Auth: apenas admin / redator ─────────────────────────────────────────────
 const session = requireAuth('/index.html')
@@ -51,6 +51,7 @@ let dpDate    = new Date()
 let tpRi      = null
 let tpCi      = null
 let resizing  = null
+let undoStack = []   // pilha de undo: { rowId, key, oldVal }
 
 // ── DOM ───────────────────────────────────────────────────────────────────────
 const $ind     = document.getElementById('save-ind')
@@ -100,7 +101,36 @@ document.addEventListener('keydown', e => {
     if (dpRi !== null) { e.preventDefault(); hideDp() }
     if (tpRi !== null) { e.preventDefault(); hideTextPopup() }
   }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    if (active || dpRi !== null || tpRi !== null) return
+    e.preventDefault()
+    applyUndo()
+  }
 })
+
+// ── Undo ────────────────────────────────────────────────────────────────────
+function pushUndo(ri, key, oldVal) {
+  undoStack.push({ rowId: rowKey(rows[ri]), key, oldVal })
+  if (undoStack.length > 100) undoStack.shift()
+}
+
+function applyUndo() {
+  if (!undoStack.length) { toast('Nada para desfazer'); return }
+  const entry = undoStack.pop()
+  const ri = rows.findIndex(r => rowKey(r) === entry.rowId)
+  if (ri < 0) { toast('Linha não encontrada','err'); return }
+
+  rows[ri][entry.key] = entry.oldVal
+  markDirty(ri)
+
+  const ci = COLS.findIndex(c => c.key === entry.key)
+  if (ci >= 0) {
+    const td = getTd(ri, ci); if (td) {
+      td.innerHTML = ''; td.appendChild(buildDisp(COLS[ci], entry.oldVal))
+    }
+  }
+  toast('Desfeito!')
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
@@ -286,9 +316,11 @@ function hideDp() {
   dpRi = null
 }
 
+let tpOldVal = ''
 function openTextPopup(ri, ci, anchorEl) {
   tpRi = ri; tpCi = ci; activeKey = rowKey(rows[ri])
   const col = COLS[ci]
+  tpOldVal = rows[ri][col.key] || ''
   $tpLabel.textContent = col.label
   $tpArea.value = rows[ri][col.key] || ''
   const rect = anchorEl.getBoundingClientRect()
@@ -314,6 +346,9 @@ function openTextPopup(ri, ci, anchorEl) {
 
 function hideTextPopup() {
   if (tpRi === null) return
+  const col = COLS[tpCi]
+  const newVal = rows[tpRi]?.[col.key] || ''
+  if (newVal !== tpOldVal) pushUndo(tpRi, col.key, tpOldVal)
   $tp.style.display = 'none'
   $tbody.querySelectorAll('td.dp-open').forEach(td => td.classList.remove('dp-open'))
   tpRi = null; tpCi = null; $tpArea.oninput = null
@@ -361,6 +396,7 @@ function renderDp() {
 function pickDate(ds) {
   if (dpRi === null) return
   const ri = dpRi
+  pushUndo(ri, 'date', rows[ri].date || '')
   rows[ri].date = ds; markDirty(ri); hideDp(); sortAndRebuild()
   const newRi = rows.findIndex(r => rowKey(r) === activeKey)
   if (newRi >= 0) {
@@ -394,7 +430,8 @@ function activateCell(ri, ci) {
   }
   hideDp()
 
-  active = { ri, ci }; activeKey = rowKey(rows[ri])
+  const oldVal = rows[ri][col.key] || ''
+  active = { ri, ci, oldVal }; activeKey = rowKey(rows[ri])
   const gen = ++activeGen
   document.querySelectorAll('.sheet-row').forEach(tr => tr.classList.remove('row-active'))
   getTr(ri)?.classList.add('row-active')
@@ -428,10 +465,51 @@ function activateCell(ri, ci) {
 
 function closeCell(ri, ci) {
   if (!active || active.ri !== ri || active.ci !== ci) return
+  const oldVal = active.oldVal
   active = null
+
+  const col = COLS[ci]
+  const newVal = rows[ri]?.[col.key] || ''
+  if (newVal !== oldVal) pushUndo(ri, col.key, oldVal)
+
   const td = getTd(ri, ci); if (!td) return
   td.innerHTML = ''
-  td.appendChild(buildDisp(COLS[ci], rows[ri]?.[COLS[ci].key]))
+  td.appendChild(buildDisp(col, rows[ri]?.[col.key]))
+
+  // ISBN auto-fill: ao fechar o campo ISBN, busca dados do livro
+  if (col.key === 'isbn') isbnAutoFill(ri)
+}
+
+// ── ISBN auto-fill ───────────────────────────────────────────────────────────
+async function isbnAutoFill(ri) {
+  const row = rows[ri]; if (!row) return
+  const isbn = (row.isbn || '').replace(/[^0-9Xx]/g, '')
+  if (isbn.length !== 10 && isbn.length !== 13) return
+
+  row.isbn = isbn
+  const isbnTd = getTd(ri, COLS.findIndex(c => c.key === 'isbn'))
+  if (isbnTd) { isbnTd.innerHTML = ''; isbnTd.appendChild(buildDisp(COLS.find(c=>c.key==='isbn'), isbn)) }
+
+  try {
+    const book = await getBookByISBN(isbn)
+    const fill = (key, val) => {
+      if (val && !row[key]) {
+        row[key] = val
+        markDirty(ri)
+        const ci = COLS.findIndex(c => c.key === key)
+        const td = getTd(ri, ci); if (!td) return
+        td.innerHTML = ''; td.appendChild(buildDisp(COLS[ci], val))
+      }
+    }
+    if (book) {
+      fill('campaign_name', book.titulo)
+      fill('authorship', book.autor)
+      fill('suggested_text', book.sinopse)
+    }
+    fill('cover_link', METABOOKS_COVER_URL(isbn))
+  } catch (e) {
+    console.warn('ISBN lookup failed:', e)
+  }
 }
 
 function handleKey(e, ri, ci) {

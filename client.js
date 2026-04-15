@@ -1,7 +1,7 @@
 // client.js — Interface planilha para anunciantes
 import { requireAuth, logout } from './auth.js'
-import { getBookings, createBooking, updateBooking, deleteBooking, getBlockedDates, getAllBookingSlots } from './api.js'
-import { FERIADOS_BR, BOOKING_STATUS, formatDate, toISODate } from './config.js'
+import { getBookings, createBooking, updateBooking, deleteBooking, getBlockedDates, getAllBookingSlots, getBookByISBN } from './api.js'
+import { FERIADOS_BR, BOOKING_STATUS, METABOOKS_COVER_URL, formatDate, toISODate } from './config.js'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const session = requireAuth('/index.html')
@@ -44,6 +44,7 @@ let tpRi      = null    // índice da linha com popup de texto aberto
 let tpCi      = null    // índice da coluna com popup de texto aberto
 let resizing  = null    // { ci, startX, startW, el } — resize de coluna em curso
 let newCnt    = 0
+let undoStack = []   // pilha de undo: { ri, key, oldVal, rowId }
 
 // ── DOM ───────────────────────────────────────────────────────────────────────
 const $name    = document.getElementById('client-name')
@@ -96,13 +97,44 @@ document.addEventListener('mouseup', () => {
   resizing = null
 })
 
-// Fecha popups com Escape
+// Fecha popups com Escape + Ctrl+Z undo
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (dpRi !== null) { e.preventDefault(); hideDp() }
     if (tpRi !== null) { e.preventDefault(); hideTextPopup() }
   }
+  // Ctrl+Z — desfazer última alteração de célula
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    if (active || dpRi !== null || tpRi !== null) return  // não interfere se editando
+    e.preventDefault()
+    applyUndo()
+  }
 })
+
+// ── Undo ────────────────────────────────────────────────────────────────────
+function pushUndo(ri, key, oldVal) {
+  undoStack.push({ rowId: rowKey(rows[ri]), key, oldVal })
+  if (undoStack.length > 100) undoStack.shift()  // limita tamanho
+}
+
+function applyUndo() {
+  if (!undoStack.length) { toast('Nada para desfazer'); return }
+  const entry = undoStack.pop()
+  const ri = rows.findIndex(r => rowKey(r) === entry.rowId)
+  if (ri < 0) { toast('Linha não encontrada','err'); return }
+
+  rows[ri][entry.key] = entry.oldVal
+  markDirty(ri)
+
+  // Atualiza a célula na tela
+  const ci = COLS.findIndex(c => c.key === entry.key)
+  if (ci >= 0) {
+    const td = getTd(ri, ci); if (td) {
+      td.innerHTML = ''; td.appendChild(buildDisp(COLS[ci], entry.oldVal))
+    }
+  }
+  toast('Desfeito!')
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
@@ -314,10 +346,12 @@ function hideDp() {
 }
 
 // ── Popup de texto longo ───────────────────────────────────────────────────────
+let tpOldVal = ''  // valor antigo do popup de texto para undo
 function openTextPopup(ri, ci, anchorEl) {
   tpRi = ri; tpCi = ci
   activeKey = rowKey(rows[ri])
   const col = COLS[ci]
+  tpOldVal = rows[ri][col.key] || ''
 
   $tpLabel.textContent = col.label
   $tpArea.value = rows[ri][col.key] || ''
@@ -355,6 +389,9 @@ function openTextPopup(ri, ci, anchorEl) {
 
 function hideTextPopup() {
   if (tpRi === null) return
+  const col = COLS[tpCi]
+  const newVal = rows[tpRi]?.[col.key] || ''
+  if (newVal !== tpOldVal) pushUndo(tpRi, col.key, tpOldVal)
   $tp.style.display = 'none'
   $tbody.querySelectorAll('td.dp-open').forEach(td => td.classList.remove('dp-open'))
   tpRi = null; tpCi = null
@@ -410,6 +447,7 @@ function renderDp() {
 function pickDate(ds) {
   if (dpRi === null) return
   const ri = dpRi
+  pushUndo(ri, 'date', rows[ri].date || '')
   rows[ri].date = ds
   markDirty(ri)
   hideDp()
@@ -463,7 +501,8 @@ function activateCell(ri, ci) {
   // Fecha datepicker se aberto
   hideDp()
 
-  active    = { ri, ci }
+  const oldVal = rows[ri][col.key] || ''
+  active    = { ri, ci, oldVal }
   activeKey = rowKey(rows[ri])
   const gen = ++activeGen
 
@@ -503,13 +542,55 @@ function activateCell(ri, ci) {
 // ── Fecha editor inline ───────────────────────────────────────────────────────
 function closeCell(ri, ci) {
   if (!active || active.ri !== ri || active.ci !== ci) return
+  const oldVal = active.oldVal
   active = null
 
-  const td = getTd(ri, ci); if (!td) return
   const col = COLS[ci]
+  const newVal = rows[ri]?.[col.key] || ''
+  if (newVal !== oldVal) {
+    pushUndo(ri, col.key, oldVal)
+  }
+
+  const td = getTd(ri, ci); if (!td) return
   td.innerHTML = ''
   td.appendChild(buildDisp(col, rows[ri]?.[col.key]))
-  // Nota: NÃO re-adiciona mousedown — o listener original do buildTd permanece no td
+
+  // ISBN auto-fill: ao fechar o campo ISBN, busca dados do livro
+  if (col.key === 'isbn') isbnAutoFill(ri)
+}
+
+// ── ISBN auto-fill ───────────────────────────────────────────────────────────
+async function isbnAutoFill(ri) {
+  const row = rows[ri]; if (!row) return
+  const isbn = (row.isbn || '').replace(/[^0-9Xx]/g, '')
+  if (isbn.length !== 10 && isbn.length !== 13) return
+
+  // Atualiza o valor limpo
+  row.isbn = isbn
+  const isbnTd = getTd(ri, COLS.findIndex(c => c.key === 'isbn'))
+  if (isbnTd) { isbnTd.innerHTML = ''; isbnTd.appendChild(buildDisp(COLS.find(c=>c.key==='isbn'), isbn)) }
+
+  try {
+    const book = await getBookByISBN(isbn)
+    const fill = (key, val) => {
+      if (val && !row[key]) {
+        row[key] = val
+        markDirty(ri)
+        const ci = COLS.findIndex(c => c.key === key)
+        const td = getTd(ri, ci); if (!td) return
+        td.innerHTML = ''; td.appendChild(buildDisp(COLS[ci], val))
+      }
+    }
+    if (book) {
+      fill('campaign_name', book.titulo)
+      fill('authorship', book.autor)
+      fill('suggested_text', book.sinopse)
+    }
+    // Sempre preencher capa via Metabooks (versão grande)
+    fill('cover_link', METABOOKS_COVER_URL(isbn))
+  } catch (e) {
+    console.warn('ISBN lookup failed:', e)
+  }
 }
 
 // ── Teclado ───────────────────────────────────────────────────────────────────
