@@ -1,0 +1,23 @@
+name: Sync editions from GetResponse
+
+on:
+  schedule:
+    # 12h UTC = 9h BRT (UTC-3)
+    - cron: '0 12 * * *'
+  workflow_dispatch:  # permite rodar manualmente na aba Actions
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run sync script
+        env:
+          GETRESPONSE_API_KEY: ${{ secrets.GETRESPONSE_API_KEY }}
+          DIRECTUS_TOKEN: ${{ secrets.DIRECTUS_TOKEN }}
+        run: node scripts/sync-editions.mjs

@@ -141,6 +141,7 @@ const AD_BOOKINGS_FIELDS = [
   { field: 'cover_link', type: 'string', schema: {}, meta: { sort: 11, width: 'half', interface: 'input' } },
   { field: 'redirect_link', type: 'string', schema: {}, meta: { sort: 12, width: 'half', interface: 'input' } },
   { field: 'admin_notes', type: 'text', schema: {}, meta: { sort: 13, width: 'full', interface: 'input-multiline', note: 'Notas internas (admin/redator)' } },
+  { field: 'published_link', type: 'string', schema: {}, meta: { sort: 14, width: 'full', interface: 'input', readonly: true, note: 'Link da edição publicada (preenchido automaticamente pelo job diário)' } },
 ]
 
 const AD_BLOCKED_DATES_FIELDS = [
