@@ -253,6 +253,10 @@ function buildTr(row, ri, altWeek) {
   COLS.forEach((col, ci) => tr.appendChild(buildTd(row, ri, col, ci)))
 
   const tdA = document.createElement('td'); tdA.className = 'col-act'
+  const btnIns = document.createElement('button')
+  btnIns.className = 'btn-ins'; btnIns.textContent = '+'; btnIns.title = 'Inserir linha abaixo'
+  btnIns.addEventListener('mousedown', e => { e.preventDefault(); insertRowBelow(ri) })
+  tdA.appendChild(btnIns)
   const btnCopy = document.createElement('button')
   btnCopy.className = 'btn-copy'; btnCopy.textContent = '⎘'; btnCopy.title = 'Copiar linha (Ctrl+V para colar)'
   btnCopy.addEventListener('mousedown', e => { e.preventDefault(); copyRow(ri) })
@@ -800,6 +804,27 @@ function addRow() {
   // Rola até a nova linha e abre o datepicker
   getTr(ri)?.scrollIntoView({ block: 'nearest' })
   activateCell(ri, DATE_CI)
+}
+
+// Insere uma nova linha logo abaixo da linha ri (índice). Como a planilha
+// auto-ordena por data, a posição visual só persiste enquanto a nova linha
+// estiver sem data preenchida.
+function insertRowBelow(ri) {
+  if (active) closeCell(active.ri, active.ci)
+  hideDp(); hideTextPopup()
+  newCnt++
+  const row = {
+    _tid: `new-${newCnt}`, client_id: clientId,
+    date:'', newsletter:'aurora', format:'destaque', status:'rascunho',
+    campaign_name:'', authorship:'', isbn:'', suggested_text:'',
+    extra_info:'', promotional_period:'', cover_link:'', redirect_link:'',
+  }
+  rows.splice(ri + 1, 0, row)
+  dirty.add(rowKey(row))
+  updateSaveBtn()
+  buildTbody()
+  getTr(ri + 1)?.scrollIntoView({ block: 'nearest' })
+  activateCell(ri + 1, DATE_CI)
 }
 
 // Campos de conteúdo que podem ser copiados/limpos
