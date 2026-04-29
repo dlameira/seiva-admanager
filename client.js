@@ -341,12 +341,9 @@ function rowKey(row) { return String(row.id || row._tid) }
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
 function sortAndRebuild() {
-  rows.sort((a, b) => {
-    if (!a.date && !b.date) return 0
-    if (!a.date) return 1
-    if (!b.date) return -1
-    return a.date.localeCompare(b.date)
-  })
+  // Auto-sort por data foi desativado a pedido — mantém ordem de
+  // inserção/ID. Linhas novas inseridas via menu de contexto ficam
+  // exatamente onde foram inseridas, mesmo após mudar a data.
   buildTbody()
 }
 

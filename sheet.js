@@ -351,13 +351,7 @@ function rowKey(row) { return String(row.id) }
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
 function sortAndRebuild() {
-  rows.sort((a, b) => {
-    if (!a.date && !b.date) return 0
-    if (!a.date) return 1; if (!b.date) return -1
-    const dc = a.date.localeCompare(b.date)
-    if (dc !== 0) return dc
-    return (a._client_name||'').localeCompare(b._client_name||'')
-  })
+  // Auto-sort por data foi desativado a pedido — mantém ordem de inserção/ID.
   buildTbody()
 }
 
