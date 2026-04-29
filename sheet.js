@@ -250,8 +250,47 @@ function buildTr(row, ri, altWeek) {
   btn.className = 'btn-del'; btn.textContent = '✕'; btn.title = 'Limpar informações'
   btn.addEventListener('mousedown', e => { e.preventDefault(); clearRow(ri) })
   tdA.appendChild(btn); tr.appendChild(tdA)
+
+  // Menu de contexto (botão direito) — só Copiar/Limpar no admin
+  tr.addEventListener('contextmenu', e => {
+    e.preventDefault()
+    showContextMenu(e.pageX, e.pageY, ri)
+  })
+
   return tr
 }
+
+// ── Menu de contexto (botão direito) ──────────────────────────────────────────
+let ctxMenuEl = null
+function hideContextMenu() {
+  if (ctxMenuEl) { ctxMenuEl.remove(); ctxMenuEl = null }
+}
+function showContextMenu(x, y, ri) {
+  hideContextMenu()
+  const menu = document.createElement('div')
+  menu.className = 'ctx-menu'
+  menu.style.left = `${x}px`
+  menu.style.top  = `${y}px`
+  const items = [
+    { label: 'Copiar linha', action: () => copyRow(ri) },
+    { label: 'Limpar informações', action: () => clearRow(ri) },
+  ]
+  for (const it of items) {
+    const div = document.createElement('div')
+    div.className = 'ctx-item'
+    div.textContent = it.label
+    div.addEventListener('click', () => { hideContextMenu(); it.action() })
+    menu.appendChild(div)
+  }
+  document.body.appendChild(menu)
+  ctxMenuEl = menu
+  const rect = menu.getBoundingClientRect()
+  if (rect.right > window.innerWidth) menu.style.left = `${x - rect.width}px`
+  if (rect.bottom > window.innerHeight) menu.style.top = `${y - rect.height}px`
+}
+document.addEventListener('click', () => hideContextMenu())
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hideContextMenu() })
+window.addEventListener('scroll', () => hideContextMenu(), true)
 
 function buildTd(row, ri, col, ci) {
   const td = document.createElement('td')

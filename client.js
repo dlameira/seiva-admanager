@@ -253,10 +253,6 @@ function buildTr(row, ri, altWeek) {
   COLS.forEach((col, ci) => tr.appendChild(buildTd(row, ri, col, ci)))
 
   const tdA = document.createElement('td'); tdA.className = 'col-act'
-  const btnIns = document.createElement('button')
-  btnIns.className = 'btn-ins'; btnIns.textContent = '+'; btnIns.title = 'Inserir linha abaixo'
-  btnIns.addEventListener('mousedown', e => { e.preventDefault(); insertRowBelow(ri) })
-  tdA.appendChild(btnIns)
   const btnCopy = document.createElement('button')
   btnCopy.className = 'btn-copy'; btnCopy.textContent = '⎘'; btnCopy.title = 'Copiar linha (Ctrl+V para colar)'
   btnCopy.addEventListener('mousedown', e => { e.preventDefault(); copyRow(ri) })
@@ -265,6 +261,13 @@ function buildTr(row, ri, altWeek) {
   btn.className = 'btn-del'; btn.textContent = '✕'; btn.title = 'Limpar informações'
   btn.addEventListener('mousedown', e => { e.preventDefault(); clearRow(ri) })
   tdA.appendChild(btn); tr.appendChild(tdA)
+
+  // Menu de contexto (botão direito) tipo Excel
+  tr.addEventListener('contextmenu', e => {
+    e.preventDefault()
+    showContextMenu(e.pageX, e.pageY, ri)
+  })
+
   return tr
 }
 
@@ -806,10 +809,10 @@ function addRow() {
   activateCell(ri, DATE_CI)
 }
 
-// Insere uma nova linha logo abaixo da linha ri (índice). Como a planilha
-// auto-ordena por data, a posição visual só persiste enquanto a nova linha
-// estiver sem data preenchida.
-function insertRowBelow(ri) {
+// Insere linha vazia em posição específica do array (acima ou abaixo da ri)
+// e abre o datepicker pra ser preenchida. Como a planilha auto-ordena por
+// data, a posição visual só persiste enquanto a nova linha não tem data.
+function insertRowAt(targetIndex) {
   if (active) closeCell(active.ri, active.ci)
   hideDp(); hideTextPopup()
   newCnt++
@@ -819,13 +822,57 @@ function insertRowBelow(ri) {
     campaign_name:'', authorship:'', isbn:'', suggested_text:'',
     extra_info:'', promotional_period:'', cover_link:'', redirect_link:'',
   }
-  rows.splice(ri + 1, 0, row)
+  rows.splice(targetIndex, 0, row)
   dirty.add(rowKey(row))
   updateSaveBtn()
   buildTbody()
-  getTr(ri + 1)?.scrollIntoView({ block: 'nearest' })
-  activateCell(ri + 1, DATE_CI)
+  getTr(targetIndex)?.scrollIntoView({ block: 'nearest' })
+  activateCell(targetIndex, DATE_CI)
 }
+function insertRowAbove(ri) { insertRowAt(ri) }
+function insertRowBelow(ri) { insertRowAt(ri + 1) }
+
+// ── Menu de contexto (botão direito) ──────────────────────────────────────────
+let ctxMenuEl = null
+function hideContextMenu() {
+  if (ctxMenuEl) { ctxMenuEl.remove(); ctxMenuEl = null }
+}
+function showContextMenu(x, y, ri) {
+  hideContextMenu()
+  const menu = document.createElement('div')
+  menu.className = 'ctx-menu'
+  menu.style.left = `${x}px`
+  menu.style.top  = `${y}px`
+  const items = [
+    { label: 'Inserir linha acima', action: () => insertRowAbove(ri) },
+    { label: 'Inserir linha abaixo', action: () => insertRowBelow(ri) },
+    { label: '——', sep: true },
+    { label: 'Copiar linha', action: () => copyRow(ri) },
+    { label: 'Limpar informações', action: () => clearRow(ri) },
+  ]
+  for (const it of items) {
+    if (it.sep) {
+      const sep = document.createElement('div')
+      sep.className = 'ctx-sep'
+      menu.appendChild(sep)
+      continue
+    }
+    const div = document.createElement('div')
+    div.className = 'ctx-item'
+    div.textContent = it.label
+    div.addEventListener('click', () => { hideContextMenu(); it.action() })
+    menu.appendChild(div)
+  }
+  document.body.appendChild(menu)
+  ctxMenuEl = menu
+  // Reposiciona se sair da tela à direita ou em baixo
+  const rect = menu.getBoundingClientRect()
+  if (rect.right > window.innerWidth) menu.style.left = `${x - rect.width}px`
+  if (rect.bottom > window.innerHeight) menu.style.top = `${y - rect.height}px`
+}
+document.addEventListener('click', () => hideContextMenu())
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hideContextMenu() })
+window.addEventListener('scroll', () => hideContextMenu(), true)
 
 // Campos de conteúdo que podem ser copiados/limpos
 const CONTENT_FIELDS = ['campaign_name','authorship','isbn','suggested_text','extra_info','promotional_period','cover_link','redirect_link']
