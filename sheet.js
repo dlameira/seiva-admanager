@@ -151,7 +151,17 @@ function applyUndo() {
   const ci = COLS.findIndex(c => c.key === entry.key)
   if (ci >= 0) {
     const td = getTd(ri, ci); if (td) {
-      td.innerHTML = ''; td.appendChild(buildDisp(COLS[ci], entry.oldVal))
+      td.innerHTML = ''; td.appendChild(buildDisp(COLS[ci], visibleVal(rows[ri], COLS[ci])))
+    }
+  }
+  if (entry.key === 'isbn' || entry.key === 'campaign_name') {
+    const dateCi = COLS.findIndex(c => c.type === 'date')
+    if (dateCi >= 0) {
+      const dateTd = getTd(ri, dateCi)
+      if (dateTd) {
+        dateTd.innerHTML = ''
+        dateTd.appendChild(buildDisp(COLS[dateCi], visibleVal(rows[ri], COLS[dateCi])))
+      }
     }
   }
   toast('Desfeito!')
@@ -305,11 +315,11 @@ function buildTd(row, ri, col, ci) {
       activateCell(ri, ci)
     })
   } else if (col.readonly) {
-    const disp = buildDisp(col, row[col.key])
+    const disp = buildDisp(col, visibleVal(row, col))
     disp.classList.add('cell-readonly')
     td.appendChild(disp)
   } else {
-    td.appendChild(buildDisp(col, row[col.key]))
+    td.appendChild(buildDisp(col, visibleVal(row, col)))
     td.addEventListener('mousedown', e => {
       if (e.target.closest('.cell-ed, .cell-link')) return
       e.preventDefault()
@@ -324,6 +334,14 @@ function dispVal(col, val) {
   if (col.type === 'sel')  return (col.opts.find(([v]) => v === val)||[])[1] || val
   if (col.type === 'date') return formatDate(val)
   return val
+}
+
+// Esconde a data quando a campanha e o ISBN ainda não foram preenchidos.
+function visibleVal(row, col) {
+  if (col.type === 'date' && !(row.campaign_name || '').trim() && !(row.isbn || '').trim()) {
+    return ''
+  }
+  return row[col.key]
 }
 
 function buildDisp(col, val) {
@@ -544,7 +562,19 @@ function closeCell(ri, ci) {
 
   const td = getTd(ri, ci); if (!td) return
   td.innerHTML = ''
-  td.appendChild(buildDisp(col, rows[ri]?.[col.key]))
+  td.appendChild(buildDisp(col, visibleVal(rows[ri], col)))
+
+  // Se mudou ISBN ou campanha, atualiza tb a c\u00e9lula de data
+  if (col.key === 'isbn' || col.key === 'campaign_name') {
+    const dateCi = COLS.findIndex(c => c.type === 'date')
+    if (dateCi >= 0) {
+      const dateTd = getTd(ri, dateCi)
+      if (dateTd) {
+        dateTd.innerHTML = ''
+        dateTd.appendChild(buildDisp(COLS[dateCi], visibleVal(rows[ri], COLS[dateCi])))
+      }
+    }
+  }
 
   // ISBN auto-fill: ao fechar o campo ISBN, busca dados do livro
   if (col.key === 'isbn') isbnAutoFill(ri)
