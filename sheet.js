@@ -1,6 +1,6 @@
 // sheet.js — Planilha admin unificada (todos os clientes)
 import { requireAuth, logout } from './auth.js'
-import { getBookings, updateBooking, deleteBooking, getClients, getBlockedDates, getBookByISBN } from './api.js'
+import { getBookings, createBooking, updateBooking, deleteBooking, getClients, getBlockedDates, getBookByISBN } from './api.js'
 import { FERIADOS_BR, BOOKING_STATUS, METABOOKS_COVER_URL, formatDate, toISODate } from './config.js'
 
 // ── Auth: apenas admin / redator ─────────────────────────────────────────────
@@ -134,14 +134,46 @@ document.addEventListener('keydown', e => {
 })
 
 // ── Undo ────────────────────────────────────────────────────────────────────
+// Tipos: { type:'field', rowId, key, oldVal } e { type:'delete', row, position }
 function pushUndo(ri, key, oldVal) {
-  undoStack.push({ rowId: rowKey(rows[ri]), key, oldVal })
+  undoStack.push({ type: 'field', rowId: rowKey(rows[ri]), key, oldVal })
+  if (undoStack.length > 100) undoStack.shift()
+}
+function pushUndoDelete(row, position) {
+  undoStack.push({ type: 'delete', row: { ...row }, position })
   if (undoStack.length > 100) undoStack.shift()
 }
 
 function applyUndo() {
   if (!undoStack.length) { toast('Nada para desfazer'); return }
   const entry = undoStack.pop()
+
+  if (entry.type === 'delete') {
+    const row = entry.row
+    if (row.id) {
+      const { id, ...payload } = row
+      createBooking(payload).then(saved => {
+        const idx = rows.findIndex(r => rowKey(r) === rowKey(row))
+        if (idx >= 0) { rows[idx] = saved; buildTbody() }
+      }).catch(err => {
+        console.warn('Falha ao restaurar via API:', err)
+        toast('Restaurada localmente, salve para persistir','err')
+      })
+      const tempRow = { ...row, _tid: `restored-${Date.now()}` }
+      delete tempRow.id
+      rows.splice(entry.position, 0, tempRow)
+      dirty.add(rowKey(tempRow))
+    } else {
+      rows.splice(entry.position, 0, row)
+      dirty.add(rowKey(row))
+    }
+    updateSaveBtn()
+    buildTbody()
+    toast('Linha restaurada')
+    return
+  }
+
+  // type === 'field'
   const ri = rows.findIndex(r => rowKey(r) === entry.rowId)
   if (ri < 0) { toast('Linha não encontrada','err'); return }
 
@@ -284,10 +316,18 @@ function showContextMenu(x, y, ri) {
   const items = [
     { label: 'Copiar linha', action: () => copyRow(ri) },
     { label: 'Limpar informações', action: () => clearRow(ri) },
+    { label: '——', sep: true },
+    { label: 'Deletar linha', action: () => deleteRow(ri), danger: true },
   ]
   for (const it of items) {
+    if (it.sep) {
+      const sep = document.createElement('div')
+      sep.className = 'ctx-sep'
+      menu.appendChild(sep)
+      continue
+    }
     const div = document.createElement('div')
-    div.className = 'ctx-item'
+    div.className = 'ctx-item' + (it.danger ? ' ctx-danger' : '')
     div.textContent = it.label
     div.addEventListener('click', () => { hideContextMenu(); it.action() })
     menu.appendChild(div)
@@ -336,12 +376,18 @@ function dispVal(col, val) {
   return val
 }
 
-// Esconde a data quando a campanha e o ISBN ainda não foram preenchidos.
+// Set de rowKeys onde o usuário escolheu uma data manualmente nesta sessão.
+const userPickedDates = new Set()
+
+// Esconde a data quando a campanha e o ISBN ainda não foram preenchidos
+// E o usuário ainda não selecionou nada manualmente E o status é rascunho.
 function visibleVal(row, col) {
-  if (col.type === 'date' && !(row.campaign_name || '').trim() && !(row.isbn || '').trim()) {
-    return ''
-  }
-  return row[col.key]
+  if (col.type !== 'date') return row[col.key]
+  const rk = rowKey(row)
+  if (userPickedDates.has(rk)) return row[col.key]
+  if ((row.status || 'rascunho') !== 'rascunho') return row[col.key]
+  if ((row.campaign_name || '').trim() || (row.isbn || '').trim()) return row[col.key]
+  return ''
 }
 
 function buildDisp(col, val) {
@@ -485,7 +531,9 @@ function pickDate(ds) {
   if (dpRi === null) return
   const ri = dpRi
   pushUndo(ri, 'date', rows[ri].date || '')
-  rows[ri].date = ds; markDirty(ri); hideDp(); sortAndRebuild()
+  rows[ri].date = ds
+  userPickedDates.add(rowKey(rows[ri]))
+  markDirty(ri); hideDp(); sortAndRebuild()
   const newRi = rows.findIndex(r => rowKey(r) === activeKey)
   if (newRi >= 0) {
     const nextCi = EDITABLE_CI[EDITABLE_CI.indexOf(DATE_CI) + 1] ?? EDITABLE_CI[0]
@@ -759,6 +807,28 @@ function pasteRow(ri) {
   markDirty(ri)
   buildTbody()
   toast('Linha colada (Ctrl+Z para desfazer)','ok')
+}
+
+// Deleta a linha inteira (do banco se tiver id, e do array local).
+// Pode ser desfeito com Ctrl+Z.
+async function deleteRow(ri) {
+  const row = rows[ri]; if (!row) return
+  if (!confirm('Deletar a linha inteira? (Ctrl+Z restaura)')) return
+  if (active?.ri === ri) { closeCell(active.ri, active.ci); active = null }
+  if (dpRi === ri) hideDp()
+  if (tpRi === ri) hideTextPopup()
+
+  pushUndoDelete(row, ri)
+  if (row.id) {
+    try { await deleteBooking(row.id) }
+    catch (e) { console.warn('Falha ao deletar no servidor:', e); toast('Erro ao deletar no servidor','err') }
+  }
+  rows.splice(ri, 1)
+  dirty.delete(rowKey(row))
+  userPickedDates.delete(rowKey(row))
+  updateSaveBtn()
+  buildTbody()
+  toast('Linha deletada (Ctrl+Z restaura)')
 }
 
 // Limpa apenas os campos de conteúdo da linha (preserva data, newsletter,

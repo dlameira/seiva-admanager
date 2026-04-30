@@ -141,28 +141,82 @@ document.addEventListener('keydown', e => {
 })
 
 // ── Undo ────────────────────────────────────────────────────────────────────
+// Tipos de entrada na pilha:
+//  - { type:'field', rowId, key, oldVal }      → mudança de campo
+//  - { type:'insert', rowId }                   → linha inserida (undo = remove)
+//  - { type:'delete', row, position, hadId }   → linha removida (undo = restaura)
 function pushUndo(ri, key, oldVal) {
-  undoStack.push({ rowId: rowKey(rows[ri]), key, oldVal })
-  if (undoStack.length > 100) undoStack.shift()  // limita tamanho
+  undoStack.push({ type: 'field', rowId: rowKey(rows[ri]), key, oldVal })
+  if (undoStack.length > 100) undoStack.shift()
+}
+function pushUndoInsert(ri) {
+  undoStack.push({ type: 'insert', rowId: rowKey(rows[ri]) })
+  if (undoStack.length > 100) undoStack.shift()
+}
+function pushUndoDelete(row, position) {
+  // Clona pra não ser afetado por mutações posteriores
+  undoStack.push({ type: 'delete', row: { ...row }, position, hadId: !!row.id })
+  if (undoStack.length > 100) undoStack.shift()
 }
 
 function applyUndo() {
   if (!undoStack.length) { toast('Nada para desfazer'); return }
   const entry = undoStack.pop()
+
+  if (entry.type === 'insert') {
+    // Desfaz inserção: remove a linha
+    const ri = rows.findIndex(r => rowKey(r) === entry.rowId)
+    if (ri < 0) { toast('Linha não encontrada','err'); return }
+    rows.splice(ri, 1)
+    dirty.delete(entry.rowId)
+    updateSaveBtn()
+    buildTbody()
+    toast('Inserção desfeita')
+    return
+  }
+
+  if (entry.type === 'delete') {
+    // Desfaz deleção: re-insere a linha
+    const row = entry.row
+    // Se tinha id no banco, recria via API
+    if (entry.hadId) {
+      const { id, ...payload } = row
+      createBooking(payload).then(saved => {
+        // Substitui id antigo pelo novo (e preserva _tid se existia)
+        const idx = rows.findIndex(r => rowKey(r) === rowKey(row))
+        if (idx >= 0) { rows[idx] = saved; buildTbody() }
+      }).catch(err => {
+        console.warn('Falha ao restaurar via API:', err)
+        toast('Restaurada localmente, salve para persistir','err')
+      })
+      // Insere localmente sem id por enquanto
+      const tempRow = { ...row, _tid: `restored-${Date.now()}` }
+      delete tempRow.id
+      rows.splice(entry.position, 0, tempRow)
+      dirty.add(rowKey(tempRow))
+    } else {
+      rows.splice(entry.position, 0, row)
+      dirty.add(rowKey(row))
+    }
+    updateSaveBtn()
+    buildTbody()
+    toast('Linha restaurada')
+    return
+  }
+
+  // type === 'field'
   const ri = rows.findIndex(r => rowKey(r) === entry.rowId)
   if (ri < 0) { toast('Linha não encontrada','err'); return }
 
   rows[ri][entry.key] = entry.oldVal
   markDirty(ri)
 
-  // Atualiza a célula na tela
   const ci = COLS.findIndex(c => c.key === entry.key)
   if (ci >= 0) {
     const td = getTd(ri, ci); if (td) {
       td.innerHTML = ''; td.appendChild(buildDisp(COLS[ci], visibleVal(rows[ri], COLS[ci])))
     }
   }
-  // Se desfez ISBN ou campanha, atualiza tb a c\u00e9lula de data
   if (entry.key === 'isbn' || entry.key === 'campaign_name') {
     const dateCi = COLS.findIndex(c => c.type === 'date')
     if (dateCi >= 0) {
@@ -324,13 +378,20 @@ function dispVal(col, val) {
   return val
 }
 
-// Esconde a data quando a campanha e o ISBN ainda não foram preenchidos.
+// Set de rowKeys onde o usuário escolheu uma data manualmente nesta sessão.
+// Usado pra continuar mostrando a data depois de selecionar mesmo sem ISBN/campanha.
+const userPickedDates = new Set()
+
+// Esconde a data quando a campanha e o ISBN ainda não foram preenchidos
+// E o usuário ainda não selecionou nada manualmente E o status é rascunho.
 // O dado continua salvo no banco; só a exibição é suprimida.
 function visibleVal(row, col) {
-  if (col.type === 'date' && !(row.campaign_name || '').trim() && !(row.isbn || '').trim()) {
-    return ''
-  }
-  return row[col.key]
+  if (col.type !== 'date') return row[col.key]
+  const rk = rowKey(row)
+  if (userPickedDates.has(rk)) return row[col.key]
+  if ((row.status || 'rascunho') !== 'rascunho') return row[col.key]
+  if ((row.campaign_name || '').trim() || (row.isbn || '').trim()) return row[col.key]
+  return ''
 }
 
 // Cria o div de display para uma célula (suporta badge de status e link clicável)
@@ -514,6 +575,7 @@ function pickDate(ds) {
   const ri = dpRi
   pushUndo(ri, 'date', rows[ri].date || '')
   rows[ri].date = ds
+  userPickedDates.add(rowKey(rows[ri]))
   markDirty(ri)
   hideDp()
   sortAndRebuild()
@@ -853,10 +915,38 @@ function insertRowAt(targetIndex) {
   }
   rows.splice(targetIndex, 0, row)
   dirty.add(rowKey(row))
+  pushUndoInsert(targetIndex)
   updateSaveBtn()
   buildTbody()
   getTr(targetIndex)?.scrollIntoView({ block: 'nearest' })
   activateCell(targetIndex, DATE_CI)
+}
+
+// Deleta a linha inteira (do banco se tiver id, e do array local).
+// Pode ser desfeito com Ctrl+Z (recria via createBooking se necess\u00e1rio).
+async function deleteRow(ri) {
+  const row = rows[ri]; if (!row) return
+  if (!confirm('Deletar a linha inteira? (Ctrl+Z restaura)')) return
+  if (active?.ri === ri) { closeCell(active.ri, active.ci); active = null }
+  if (dpRi === ri) hideDp()
+  if (tpRi === ri) hideTextPopup()
+
+  pushUndoDelete(row, ri)
+  // Se já estava salva no banco, deleta no servidor
+  if (row.id) {
+    try {
+      await deleteBooking(row.id)
+    } catch (e) {
+      console.warn('Falha ao deletar no servidor:', e)
+      toast('Erro ao deletar no servidor','err')
+    }
+  }
+  rows.splice(ri, 1)
+  dirty.delete(rowKey(row))
+  userPickedDates.delete(rowKey(row))
+  updateSaveBtn()
+  buildTbody()
+  toast('Linha deletada (Ctrl+Z restaura)')
 }
 function insertRowAbove(ri) { insertRowAt(ri) }
 function insertRowBelow(ri) { insertRowAt(ri + 1) }
@@ -878,6 +968,8 @@ function showContextMenu(x, y, ri) {
     { label: '——', sep: true },
     { label: 'Copiar linha', action: () => copyRow(ri) },
     { label: 'Limpar informações', action: () => clearRow(ri) },
+    { label: '——', sep: true },
+    { label: 'Deletar linha', action: () => deleteRow(ri), danger: true },
   ]
   for (const it of items) {
     if (it.sep) {
@@ -887,7 +979,7 @@ function showContextMenu(x, y, ri) {
       continue
     }
     const div = document.createElement('div')
-    div.className = 'ctx-item'
+    div.className = 'ctx-item' + (it.danger ? ' ctx-danger' : '')
     div.textContent = it.label
     div.addEventListener('click', () => { hideContextMenu(); it.action() })
     menu.appendChild(div)
