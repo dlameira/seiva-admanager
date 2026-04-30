@@ -1,7 +1,7 @@
 // client.js — Interface planilha para anunciantes
 import { requireAuth, logout } from './auth.js'
-import { getBookings, createBooking, updateBooking, deleteBooking, getBlockedDates, getAllBookingSlots, getBookByISBN } from './api.js'
-import { FERIADOS_BR, BOOKING_STATUS, METABOOKS_COVER_URL, formatDate, toISODate } from './config.js'
+import { getBookings, createBooking, updateBooking, deleteBooking, getBlockedDates, getAllBookingSlots, getBookByISBN, getQuotas } from './api.js'
+import { FERIADOS_BR, BOOKING_STATUS, METABOOKS_COVER_URL, formatDate, toISODate, getQuotaBreakdown } from './config.js'
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 const session = requireAuth('/index.html')
@@ -14,8 +14,8 @@ const clientName = session.clientName || 'Anunciante'
 // ── Colunas ───────────────────────────────────────────────────────────────────
 const COLS = [
   { key: 'date',               label: 'Data',              w: 108, type: 'date' },
-  { key: 'newsletter',         label: 'Newsletter',         w:  96, type: 'sel', opts: [['aurora','Aurora'],['indice','Índice']], readonly: true },
-  { key: 'format',             label: 'Formato',            w: 120, type: 'sel', opts: [['destaque','Destaque'],['corpo','Corpo do Email']], readonly: true },
+  { key: 'newsletter',         label: 'Newsletter',         w:  96, type: 'sel', opts: [['aurora','Aurora'],['indice','Índice']] },
+  { key: 'format',             label: 'Formato',            w: 120, type: 'sel', opts: [['destaque','Destaque'],['corpo','Corpo do Email']] },
   { key: 'status',             label: 'Status',             w: 130, type: 'status' },
   { key: 'isbn',               label: 'ISBN',               w: 120, type: 'text' },
   { key: 'campaign_name',      label: 'Nome da Campanha',   w: 220, type: 'text' },
@@ -35,6 +35,7 @@ const EDITABLE_CI = COLS.map((c,i) => c.type !== 'badge' && c.type !== 'status' 
 let rows      = []
 let blocked   = []
 let allSlots  = []   // bookings confirmados de todos os clientes (para bloquear datas)
+let allQuotas = []   // cotas do cliente (para popup de Cotas)
 let dirty     = new Set()
 let active    = null    // { ri, ci } — célula com editor inline (não-data)
 let activeGen = 0       // incrementa a cada abertura; invalida timers de blur antigos
@@ -67,6 +68,47 @@ const $toast   = document.getElementById('toast')
 
 $name.textContent = clientName
 document.getElementById('btn-logout').addEventListener('click', logout)
+
+// ── Popup de Cotas ────────────────────────────────────────────────────────────
+const $cotasBtn     = document.getElementById('btn-cotas')
+const $cotasPopup   = document.getElementById('cotas-popup')
+const $cotasOverlay = document.getElementById('cotas-overlay')
+const $cotasBody    = document.getElementById('cotas-body')
+const $closeCotas   = document.getElementById('btn-close-cotas')
+
+function openCotas() {
+  // Reaproveita rows e allQuotas atualizados em memória
+  const slots = [
+    ['aurora', 'destaque', 'Aurora · Destaque'],
+    ['aurora', 'corpo',    'Aurora · Corpo'],
+    ['indice', 'destaque', 'Índice · Destaque'],
+    ['indice', 'corpo',    'Índice · Corpo'],
+  ]
+  $cotasBody.innerHTML = ''
+  for (const [nl, fmt, label] of slots) {
+    const b = getQuotaBreakdown(clientId, nl, fmt, allQuotas, rows)
+    const tr = document.createElement('tr')
+    tr.style.borderBottom = '1px solid var(--border)'
+    tr.innerHTML = `
+      <td style="padding:8px 4px;">${label}</td>
+      <td style="padding:8px 4px; text-align:center;">${b.total}</td>
+      <td style="padding:8px 4px; text-align:center; color:#15803d;">${b.veiculated}</td>
+      <td style="padding:8px 4px; text-align:center; color:#b45309;">${b.programmed}</td>
+      <td style="padding:8px 4px; text-align:center; font-weight:600;">${b.remaining}</td>
+    `
+    $cotasBody.appendChild(tr)
+  }
+  $cotasOverlay.style.display = 'block'
+  $cotasPopup.style.display = 'block'
+}
+function closeCotas() {
+  $cotasOverlay.style.display = 'none'
+  $cotasPopup.style.display = 'none'
+}
+$cotasBtn.addEventListener('click', openCotas)
+$closeCotas.addEventListener('click', closeCotas)
+$cotasOverlay.addEventListener('click', closeCotas)
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $cotasPopup.style.display === 'block') closeCotas() })
 $save.addEventListener('click', saveAll)
 document.getElementById('btn-add').addEventListener('click', addRow)
 
@@ -233,14 +275,17 @@ function applyUndo() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   try {
-    const [own, blk, slots] = await Promise.all([
+    const [own, blk, slots, quotas] = await Promise.all([
       getBookings({ clientId }),
       getBlockedDates(),
       getAllBookingSlots(),
+      getQuotas(clientId),
     ])
-    rows     = (own || []).map(b => ({ ...b }))
+    rows     = (own || []).map((b, i) => ({ ...b, _origIdx: i }))
+    _origIdxCounter = rows.length
     blocked  = blk   || []
     allSlots = slots || []
+    allQuotas = quotas || []
 
     buildThead()
     sortAndRebuild()
@@ -263,8 +308,20 @@ function buildThead() {
   const tr = document.createElement('tr')
   mkTh(tr, '', 'col-rn')
   COLS.forEach((c, ci) => {
-    const th = mkTh(tr, c.label)
+    const th = mkTh(tr, '')
     th.style.width = c.w + 'px'
+    // Para a coluna de data, label fica clicável com indicador de sort
+    if (c.type === 'date') {
+      th.classList.add('th-sortable')
+      const arrow = sortDir === 'asc' ? ' ▲' : sortDir === 'desc' ? ' ▼' : ''
+      th.textContent = c.label + arrow
+      th.addEventListener('click', e => {
+        if (e.target.classList.contains('col-resizer')) return
+        cycleSortDir()
+      })
+    } else {
+      th.textContent = c.label
+    }
     // Alça de redimensionamento — igual ao Google Sheets
     const rz = document.createElement('div')
     rz.className = 'col-resizer'
@@ -310,6 +367,7 @@ function buildTr(row, ri, altWeek) {
   if (altWeek) tr.classList.add('week-alt')
   if (dirty.has(rowKey(row))) tr.classList.add('row-dirty')
   if (activeKey === rowKey(row)) tr.classList.add('row-active')
+  if (row.status === 'veiculado') tr.classList.add('row-veiculado')
 
   const tdN = document.createElement('td')
   tdN.className = 'col-rn'; tdN.textContent = ri+1
@@ -327,9 +385,10 @@ function buildTr(row, ri, altWeek) {
   btn.addEventListener('mousedown', e => { e.preventDefault(); clearRow(ri) })
   tdA.appendChild(btn); tr.appendChild(tdA)
 
-  // Menu de contexto (botão direito) tipo Excel
+  // Menu de contexto (botão direito) tipo Excel — bloqueado em veiculado
   tr.addEventListener('contextmenu', e => {
     e.preventDefault()
+    if (rows[ri]?.status === 'veiculado') return
     showContextMenu(e.pageX, e.pageY, ri)
   })
 
@@ -427,48 +486,40 @@ function buildDisp(col, val) {
 function rowKey(row) { return String(row.id || row._tid) }
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
-// Ordem canônica dos slots dentro da mesma semana
-const SLOT_ORDER = {
-  'aurora_destaque': 0,
-  'indice_destaque': 1,
-  'aurora_corpo':    2,
-  'indice_corpo':    3,
-}
+// Sort manual: estado controlado por clique no header "Data"
+// null → ordem original (insertion); 'asc' → mais antiga primeiro; 'desc' → mais recente primeiro
+let sortDir = null
+let _origIdxCounter = 0
 
-// Retorna a segunda-feira (ISO) da semana de uma data; '' se não houver data
-function mondayOf(dateStr) {
-  if (!dateStr) return ''
-  const d = new Date(dateStr + 'T12:00:00')
-  if (isNaN(d.getTime())) return ''
-  const dow = d.getDay()
-  const offset = dow === 0 ? -6 : 1 - dow
-  d.setDate(d.getDate() + offset)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${dd}`
-}
-
-// Ordena por semana ascendente; dentro da semana, pela ordem canônica
-// dos slots (Aurora Destaque → Índice Destaque → Aurora Corpo). Datas
-// vazias vão pro fim. Linhas no mesmo slot+semana ficam por id (multi-booking).
+// sortAndRebuild mantém a ordem atual dos rows e só re-renderiza.
+// O sort por data só acontece quando o usuário clica no header "Data".
 function sortAndRebuild() {
-  rows.sort((a, b) => {
-    const wa = mondayOf(a.date)
-    const wb = mondayOf(b.date)
-    if (wa !== wb) {
-      if (!wa) return 1
-      if (!wb) return -1
-      return wa.localeCompare(wb)
-    }
-    const ka = `${a.newsletter}_${a.format}`
-    const kb = `${b.newsletter}_${b.format}`
-    const oa = SLOT_ORDER[ka] ?? 99
-    const ob = SLOT_ORDER[kb] ?? 99
-    if (oa !== ob) return oa - ob
-    // Mesma semana, mesmo slot → estabilidade por id/_tid
-    return String(a.id || a._tid || '').localeCompare(String(b.id || b._tid || ''))
-  })
+  buildTbody()
+}
+
+// Sort de fato: chamado pelo header click handler, e quando precisa
+// reaplicar (ex: após adicionar uma row enquanto sort está ativo).
+function applySort() {
+  if (sortDir === null) {
+    rows.sort((a, b) => (a._origIdx ?? 0) - (b._origIdx ?? 0))
+  } else {
+    rows.sort((a, b) => {
+      const da = a.date || ''
+      const db = b.date || ''
+      if (!da && !db) return (a._origIdx ?? 0) - (b._origIdx ?? 0)
+      if (!da) return 1
+      if (!db) return -1
+      const cmp = da.localeCompare(db)
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }
+}
+
+function cycleSortDir() {
+  // null → asc → desc → null
+  sortDir = sortDir === null ? 'asc' : sortDir === 'asc' ? 'desc' : null
+  applySort()
+  buildThead()  // atualiza indicador ▲/▼
   buildTbody()
 }
 
@@ -641,6 +692,8 @@ const STATUS_CLIENT_OPTS = [['rascunho','Rascunho'],['pendente','Submetido pelo 
 function activateCell(ri, ci) {
   const col = COLS[ci]
   if (!col || col.type === 'badge' || col.readonly) return
+  // Linhas veiculadas são imutáveis
+  if (rows[ri]?.status === 'veiculado') return
   if (col.type === 'status' && !['rascunho','pendente'].includes(rows[ri]?.status)) return
 
   // ── Célula de DATA → abre datepicker ──────────────────────────────────────
@@ -954,13 +1007,9 @@ function insertRowAt(targetIndex) {
   if (active) closeCell(active.ri, active.ci)
   hideDp(); hideTextPopup()
   newCnt++
-  // Herda newsletter/format da linha de origem (índice de referência)
-  // pra manter coerência com a ordem canônica.
-  const refIdx = Math.min(Math.max(0, targetIndex - 1), rows.length - 1)
-  const ref = rows[refIdx] || {}
   const row = {
-    _tid: `new-${newCnt}`, client_id: clientId,
-    date:'', newsletter: ref.newsletter || 'aurora', format: ref.format || 'destaque', status:'rascunho',
+    _tid: `new-${newCnt}`, client_id: clientId, _origIdx: _origIdxCounter++,
+    date:'', newsletter: 'aurora', format: 'destaque', status:'rascunho',
     campaign_name:'', authorship:'', isbn:'', suggested_text:'',
     extra_info:'', promotional_period:'', cover_link:'', redirect_link:'',
   }
@@ -968,14 +1017,9 @@ function insertRowAt(targetIndex) {
   dirty.add(rowKey(row))
   pushUndoInsert(targetIndex)
   updateSaveBtn()
-  // Re-ordena pela canônica (semana + slot) — a posição final é determinística
-  sortAndRebuild()
-  // Reaponta pro novo índice da linha após o sort
-  const newRi = rows.findIndex(r => rowKey(r) === rowKey(row))
-  if (newRi >= 0) {
-    getTr(newRi)?.scrollIntoView({ block: 'nearest' })
-    activateCell(newRi, DATE_CI)
-  }
+  buildTbody()
+  getTr(targetIndex)?.scrollIntoView({ block: 'nearest' })
+  activateCell(targetIndex, DATE_CI)
 }
 
 // Apaga a data da linha (esconde visualmente). O dado segue no banco

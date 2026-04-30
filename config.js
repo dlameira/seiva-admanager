@@ -97,6 +97,27 @@ export function getSlotStatus(dateStr, bookings) {
   return slots
 }
 
+// Quebra a cota de um cliente em (total, veiculados, programados, restam)
+// para um slot específico (newsletter+format). Considera cotas que cobrem
+// o slot diretamente OU via 'ambas'/'ambos'. Cotas expiradas são ignoradas.
+export function getQuotaBreakdown(clientId, newsletter, format, quotas, bookings) {
+  const now = new Date()
+  const matching = (quotas || []).filter(q =>
+    q.client_id === clientId &&
+    (q.newsletter === newsletter || q.newsletter === 'ambas') &&
+    (q.format === format || q.format === 'ambos') &&
+    (!q.expires_at || new Date(q.expires_at) >= now)
+  )
+  const total = matching.reduce((s, q) => s + (q.total_slots || 0), 0)
+  const ofSlot = (bookings || []).filter(b =>
+    b.client_id === clientId && b.newsletter === newsletter && b.format === format
+  )
+  const veiculated = ofSlot.filter(b => b.status === 'veiculado').length
+  const programmed = ofSlot.filter(b => ['pendente','aprovado'].includes(b.status)).length
+  const remaining  = Math.max(0, total - veiculated - programmed)
+  return { total, veiculated, programmed, remaining }
+}
+
 export function clientHasQuota(clientId, newsletter, format, quotas, bookings, targetDate = null) {
   const now = new Date()
   const matching = quotas.filter(q =>

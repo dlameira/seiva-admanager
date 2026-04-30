@@ -110,6 +110,15 @@
     .sheet-row:hover .btn-copy { opacity: .6; }
     .btn-copy:hover { opacity: 1 !important; color: #1a73e8; }
 
+    /* Linha veiculada: imutável */
+    .row-veiculado td { background: #f1f5f9 !important; color: var(--text-muted); }
+    .row-veiculado td:hover { cursor: not-allowed; }
+    .row-veiculado .btn-copy, .row-veiculado .btn-del { display: none !important; }
+
+    /* Header da coluna Data: clicável pra ordenar */
+    .th-sortable { cursor: pointer; user-select: none; }
+    .th-sortable:hover { background: #f3f4f6; }
+
     /* Filtro por empresa */
     .filter-select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 13px; font-family: inherit; cursor: pointer; }
     .filter-select:hover { border-color: var(--text-muted); }

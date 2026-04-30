@@ -134,6 +134,15 @@
     .sheet-row:hover .btn-copy { opacity: .6; }
     .btn-copy:hover { opacity: 1 !important; color: #1a73e8; }
 
+    /* Linha veiculada: imutável, visualmente diferenciada */
+    .row-veiculado td { background: #f1f5f9 !important; color: var(--text-muted); }
+    .row-veiculado td:hover { cursor: not-allowed; }
+    .row-veiculado .btn-copy, .row-veiculado .btn-del { display: none !important; }
+
+    /* Header da coluna Data: clicável pra ordenar */
+    .th-sortable { cursor: pointer; user-select: none; }
+    .th-sortable:hover { background: #f3f4f6; }
+
     /* Menu de contexto (botão direito do mouse) */
     .ctx-menu { position: absolute; z-index: 9999; background: #fff; border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.12); padding: 4px 0; min-width: 180px; font-size: 13px; }
     .ctx-item { padding: 7px 14px; cursor: pointer; color: var(--text); }
@@ -206,12 +215,34 @@
       <span class="header-client" id="client-name">…</span>
     </div>
     <div class="header-right">
+      <button class="btn btn-ghost" id="btn-cotas" title="Ver cotas">Cotas</button>
       <span class="save-indicator" id="save-ind"></span>
       <button class="btn btn-primary" id="btn-save" disabled>Salvar</button>
       <button class="btn-theme" id="btn-theme" title="Alternar tema">&#9790;</button>
       <button class="btn btn-ghost"   id="btn-logout">Sair</button>
     </div>
   </header>
+
+  <!-- Popup de Cotas -->
+  <div id="cotas-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:998;"></div>
+  <div id="cotas-popup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:8px; box-shadow:0 10px 40px rgba(0,0,0,.2); padding:24px; min-width:480px; z-index:999;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3 style="margin:0; font-size:16px;">Cotas</h3>
+      <button id="btn-close-cotas" style="background:none; border:none; cursor:pointer; font-size:20px; color:#666;">&times;</button>
+    </div>
+    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border); text-align:left;">
+          <th style="padding:8px 4px;">Slot</th>
+          <th style="padding:8px 4px; text-align:center;">Total</th>
+          <th style="padding:8px 4px; text-align:center;">Veiculados</th>
+          <th style="padding:8px 4px; text-align:center;">Programados</th>
+          <th style="padding:8px 4px; text-align:center;">Restam</th>
+        </tr>
+      </thead>
+      <tbody id="cotas-body"></tbody>
+    </table>
+  </div>
 
   <div class="sheet-table-wrap">
     <div id="sheet-loading">Carregando…</div>

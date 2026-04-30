@@ -224,10 +224,12 @@ async function init() {
     ])
     clients = Object.fromEntries((clientList||[]).map(c => [c.id, c.company_name]))
     blocked = blk || []
-    rows = (bookings||[]).map(b => ({
+    rows = (bookings||[]).map((b, i) => ({
       ...b,
       _client_name: clients[b.client_id] || `Cliente ${b.client_id}`,
+      _origIdx: i,
     }))
+    _origIdxCounter = rows.length
     populateClientFilter(clientList || [])
     buildThead()
     sortAndRebuild()
@@ -248,8 +250,19 @@ function buildThead() {
   const tr = document.createElement('tr')
   mkTh(tr, '', 'col-rn')
   COLS.forEach((c, ci) => {
-    const th = mkTh(tr, c.label)
+    const th = mkTh(tr, '')
     th.style.width = c.w + 'px'
+    if (c.type === 'date') {
+      th.classList.add('th-sortable')
+      const arrow = sortDir === 'asc' ? ' ▲' : sortDir === 'desc' ? ' ▼' : ''
+      th.textContent = c.label + arrow
+      th.addEventListener('click', e => {
+        if (e.target.classList.contains('col-resizer')) return
+        cycleSortDir()
+      })
+    } else {
+      th.textContent = c.label
+    }
     const rz = document.createElement('div')
     rz.className = 'col-resizer'
     rz.addEventListener('mousedown', e => {
@@ -315,6 +328,7 @@ function buildTr(row, ri, altWeek) {
   if (altWeek) tr.classList.add('week-alt')
   if (dirty.has(rowKey(row))) tr.classList.add('row-dirty')
   if (activeKey === rowKey(row)) tr.classList.add('row-active')
+  if (row.status === 'veiculado') tr.classList.add('row-veiculado')
 
   const tdN = document.createElement('td')
   tdN.className = 'col-rn'; tdN.textContent = ri+1
@@ -332,9 +346,10 @@ function buildTr(row, ri, altWeek) {
   btn.addEventListener('mousedown', e => { e.preventDefault(); clearRow(ri) })
   tdA.appendChild(btn); tr.appendChild(tdA)
 
-  // Menu de contexto (botão direito) — só Copiar/Limpar no admin
+  // Menu de contexto (botão direito) — bloqueado em linhas veiculadas
   tr.addEventListener('contextmenu', e => {
     e.preventDefault()
+    if (rows[ri]?.status === 'veiculado') return
     showContextMenu(e.pageX, e.pageY, ri)
   })
 
@@ -458,47 +473,34 @@ function buildDisp(col, val) {
 function rowKey(row) { return String(row.id) }
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
-// Ordem canônica dos slots dentro da mesma semana
-const SLOT_ORDER = {
-  'aurora_destaque': 0,
-  'indice_destaque': 1,
-  'aurora_corpo':    2,
-  'indice_corpo':    3,
-}
+// Sort manual no admin: estado controlado por clique no header "Data"
+let sortDir = null
+let _origIdxCounter = 0
 
-function mondayOf(dateStr) {
-  if (!dateStr) return ''
-  const d = new Date(dateStr + 'T12:00:00')
-  if (isNaN(d.getTime())) return ''
-  const dow = d.getDay()
-  const offset = dow === 0 ? -6 : 1 - dow
-  d.setDate(d.getDate() + offset)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${dd}`
-}
-
-// Ordena por: cliente (alfabético) → semana → slot canônico
-// (Aurora Destaque → Índice Destaque → Aurora Corpo)
 function sortAndRebuild() {
-  rows.sort((a, b) => {
-    const cn = (a._client_name || '').localeCompare(b._client_name || '')
-    if (cn !== 0) return cn
-    const wa = mondayOf(a.date)
-    const wb = mondayOf(b.date)
-    if (wa !== wb) {
-      if (!wa) return 1
-      if (!wb) return -1
-      return wa.localeCompare(wb)
-    }
-    const ka = `${a.newsletter}_${a.format}`
-    const kb = `${b.newsletter}_${b.format}`
-    const oa = SLOT_ORDER[ka] ?? 99
-    const ob = SLOT_ORDER[kb] ?? 99
-    if (oa !== ob) return oa - ob
-    return String(a.id || a._tid || '').localeCompare(String(b.id || b._tid || ''))
-  })
+  buildTbody()
+}
+
+function applySort() {
+  if (sortDir === null) {
+    rows.sort((a, b) => (a._origIdx ?? 0) - (b._origIdx ?? 0))
+  } else {
+    rows.sort((a, b) => {
+      const da = a.date || ''
+      const db = b.date || ''
+      if (!da && !db) return (a._origIdx ?? 0) - (b._origIdx ?? 0)
+      if (!da) return 1
+      if (!db) return -1
+      const cmp = da.localeCompare(db)
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }
+}
+
+function cycleSortDir() {
+  sortDir = sortDir === null ? 'asc' : sortDir === 'asc' ? 'desc' : null
+  applySort()
+  buildThead()
   buildTbody()
 }
 
@@ -630,6 +632,8 @@ function pickDate(ds) {
 function activateCell(ri, ci) {
   const col = COLS[ci]
   if (!col || col.readonly) return
+  // Linhas veiculadas são imutáveis
+  if (rows[ri]?.status === 'veiculado') return
 
   if (col.type === 'date') {
     if (active) closeCell(active.ri, active.ci)
@@ -905,6 +909,7 @@ function insertRowAt(targetIndex, sourceRi) {
     _tid: `new-${Date.now()}`,
     client_id: src.client_id,
     _client_name: src._client_name || '',
+    _origIdx: _origIdxCounter++,
     date:'', newsletter:'aurora', format:'destaque', status:'rascunho',
     campaign_name:'', authorship:'', isbn:'', suggested_text:'',
     extra_info:'', promotional_period:'', cover_link:'', redirect_link:'',
@@ -913,13 +918,9 @@ function insertRowAt(targetIndex, sourceRi) {
   dirty.add(rowKey(row))
   pushUndoInsert(targetIndex)
   updateSaveBtn()
-  sortAndRebuild()
-  // Reaponta pro novo índice da linha após o sort
-  const newRi = rows.findIndex(r => rowKey(r) === rowKey(row))
-  if (newRi >= 0) {
-    getTr(newRi)?.scrollIntoView({ block: 'nearest' })
-    activateCell(newRi, DATE_CI)
-  }
+  buildTbody()
+  getTr(targetIndex)?.scrollIntoView({ block: 'nearest' })
+  activateCell(targetIndex, DATE_CI)
 }
 function insertRowAbove(ri) { insertRowAt(ri, ri) }
 function insertRowBelow(ri) { insertRowAt(ri + 1, ri) }
