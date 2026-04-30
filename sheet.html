@@ -110,6 +110,10 @@
     .sheet-row:hover .btn-copy { opacity: .6; }
     .btn-copy:hover { opacity: 1 !important; color: #1a73e8; }
 
+    /* Filtro por empresa */
+    .filter-select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 13px; font-family: inherit; cursor: pointer; }
+    .filter-select:hover { border-color: var(--text-muted); }
+
     /* Menu de contexto (botão direito do mouse) */
     .ctx-menu { position: absolute; z-index: 9999; background: #fff; border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.12); padding: 4px 0; min-width: 180px; font-size: 13px; }
     .ctx-item { padding: 7px 14px; cursor: pointer; color: var(--text); }
@@ -170,6 +174,9 @@
       <span class="header-client">Planilha Admin</span>
     </div>
     <div class="header-right">
+      <select id="filter-client" class="filter-select" title="Filtrar por empresa">
+        <option value="">Todas as empresas</option>
+      </select>
       <span class="save-indicator" id="save-ind"></span>
       <button class="btn btn-primary" id="btn-save" disabled>Salvar</button>
       <button class="btn-theme" id="btn-theme" title="Alternar tema">&#9790;</button>

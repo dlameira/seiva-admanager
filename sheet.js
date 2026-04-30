@@ -228,6 +228,7 @@ async function init() {
       ...b,
       _client_name: clients[b.client_id] || `Cliente ${b.client_id}`,
     }))
+    populateClientFilter(clientList || [])
     buildThead()
     sortAndRebuild()
     $loading.style.display = 'none'
@@ -276,11 +277,34 @@ function mkTh(tr, txt, cls) {
 
 // ── Linhas ────────────────────────────────────────────────────────────────────
 // Alterna cor a cada 3 linhas (3 spots por semana)
+// Filtro de cliente (string vazia = todas as empresas)
+let clientFilter = ''
+
+function populateClientFilter(clientList) {
+  const sel = document.getElementById('filter-client')
+  if (!sel) return
+  // Ordena alfabeticamente por nome
+  const sorted = [...clientList].sort((a,b) => (a.company_name||'').localeCompare(b.company_name||''))
+  for (const c of sorted) {
+    const opt = document.createElement('option')
+    opt.value = String(c.id)
+    opt.textContent = c.company_name
+    sel.appendChild(opt)
+  }
+  sel.addEventListener('change', () => {
+    clientFilter = sel.value
+    buildTbody()
+  })
+}
+
 function buildTbody() {
   $tbody.innerHTML = ''
+  let visIdx = 0
   rows.forEach((row, ri) => {
-    const altWeek = Math.floor(ri / 3) % 2 === 1
+    if (clientFilter && String(row.client_id) !== clientFilter) return
+    const altWeek = Math.floor(visIdx / 3) % 2 === 1
     $tbody.appendChild(buildTr(row, ri, altWeek))
+    visIdx++
   })
 }
 
