@@ -427,10 +427,48 @@ function buildDisp(col, val) {
 function rowKey(row) { return String(row.id || row._tid) }
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
+// Ordem canônica dos slots dentro da mesma semana
+const SLOT_ORDER = {
+  'aurora_destaque': 0,
+  'indice_destaque': 1,
+  'aurora_corpo':    2,
+  'indice_corpo':    3,
+}
+
+// Retorna a segunda-feira (ISO) da semana de uma data; '' se não houver data
+function mondayOf(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr + 'T12:00:00')
+  if (isNaN(d.getTime())) return ''
+  const dow = d.getDay()
+  const offset = dow === 0 ? -6 : 1 - dow
+  d.setDate(d.getDate() + offset)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
+// Ordena por semana ascendente; dentro da semana, pela ordem canônica
+// dos slots (Aurora Destaque → Índice Destaque → Aurora Corpo). Datas
+// vazias vão pro fim. Linhas no mesmo slot+semana ficam por id (multi-booking).
 function sortAndRebuild() {
-  // Auto-sort por data foi desativado a pedido — mantém ordem de
-  // inserção/ID. Linhas novas inseridas via menu de contexto ficam
-  // exatamente onde foram inseridas, mesmo após mudar a data.
+  rows.sort((a, b) => {
+    const wa = mondayOf(a.date)
+    const wb = mondayOf(b.date)
+    if (wa !== wb) {
+      if (!wa) return 1
+      if (!wb) return -1
+      return wa.localeCompare(wb)
+    }
+    const ka = `${a.newsletter}_${a.format}`
+    const kb = `${b.newsletter}_${b.format}`
+    const oa = SLOT_ORDER[ka] ?? 99
+    const ob = SLOT_ORDER[kb] ?? 99
+    if (oa !== ob) return oa - ob
+    // Mesma semana, mesmo slot → estabilidade por id/_tid
+    return String(a.id || a._tid || '').localeCompare(String(b.id || b._tid || ''))
+  })
   buildTbody()
 }
 
@@ -916,9 +954,13 @@ function insertRowAt(targetIndex) {
   if (active) closeCell(active.ri, active.ci)
   hideDp(); hideTextPopup()
   newCnt++
+  // Herda newsletter/format da linha de origem (índice de referência)
+  // pra manter coerência com a ordem canônica.
+  const refIdx = Math.min(Math.max(0, targetIndex - 1), rows.length - 1)
+  const ref = rows[refIdx] || {}
   const row = {
     _tid: `new-${newCnt}`, client_id: clientId,
-    date:'', newsletter:'aurora', format:'destaque', status:'rascunho',
+    date:'', newsletter: ref.newsletter || 'aurora', format: ref.format || 'destaque', status:'rascunho',
     campaign_name:'', authorship:'', isbn:'', suggested_text:'',
     extra_info:'', promotional_period:'', cover_link:'', redirect_link:'',
   }
@@ -926,9 +968,14 @@ function insertRowAt(targetIndex) {
   dirty.add(rowKey(row))
   pushUndoInsert(targetIndex)
   updateSaveBtn()
-  buildTbody()
-  getTr(targetIndex)?.scrollIntoView({ block: 'nearest' })
-  activateCell(targetIndex, DATE_CI)
+  // Re-ordena pela canônica (semana + slot) — a posição final é determinística
+  sortAndRebuild()
+  // Reaponta pro novo índice da linha após o sort
+  const newRi = rows.findIndex(r => rowKey(r) === rowKey(row))
+  if (newRi >= 0) {
+    getTr(newRi)?.scrollIntoView({ block: 'nearest' })
+    activateCell(newRi, DATE_CI)
+  }
 }
 
 // Apaga a data da linha (esconde visualmente). O dado segue no banco
