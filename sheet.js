@@ -315,6 +315,7 @@ function showContextMenu(x, y, ri) {
   menu.style.top  = `${y}px`
   const items = [
     { label: 'Copiar linha', action: () => copyRow(ri) },
+    { label: 'Apagar data', action: () => clearDate(ri) },
     { label: 'Limpar informações', action: () => clearRow(ri) },
     { label: '——', sep: true },
     { label: 'Deletar linha', action: () => deleteRow(ri), danger: true },
@@ -378,12 +379,13 @@ function dispVal(col, val) {
 
 // Set de rowKeys onde o usuário escolheu uma data manualmente nesta sessão.
 const userPickedDates = new Set()
+const clearedDates   = new Set()
 
-// Esconde a data quando a campanha e o ISBN ainda não foram preenchidos
-// E o usuário ainda não selecionou nada manualmente E o status é rascunho.
+// Lógica de exibição da data
 function visibleVal(row, col) {
   if (col.type !== 'date') return row[col.key]
   const rk = rowKey(row)
+  if (clearedDates.has(rk)) return ''
   if (userPickedDates.has(rk)) return row[col.key]
   if ((row.status || 'rascunho') !== 'rascunho') return row[col.key]
   if ((row.campaign_name || '').trim() || (row.isbn || '').trim()) return row[col.key]
@@ -501,7 +503,7 @@ function renderDp() {
   for (let i = 0; i < offset; i++) $dpGrid.appendChild(document.createElement('div'))
 
   const today = toISODate(new Date())
-  const selDs = dpRi !== null ? rows[dpRi]?.date : null
+  const selDs = (dpRi !== null && !clearedDates.has(rowKey(rows[dpRi] || {}))) ? rows[dpRi]?.date : null
   const curRow = dpRi !== null ? rows[dpRi] : null
   // Datas tomadas por bookings confirmados do mesmo slot (excluindo a linha atual)
   const takenDates = new Set(
@@ -532,7 +534,9 @@ function pickDate(ds) {
   const ri = dpRi
   pushUndo(ri, 'date', rows[ri].date || '')
   rows[ri].date = ds
-  userPickedDates.add(rowKey(rows[ri]))
+  const rk = rowKey(rows[ri])
+  userPickedDates.add(rk)
+  clearedDates.delete(rk)
   markDirty(ri); hideDp(); sortAndRebuild()
   const newRi = rows.findIndex(r => rowKey(r) === activeKey)
   if (newRi >= 0) {
@@ -807,6 +811,23 @@ function pasteRow(ri) {
   markDirty(ri)
   buildTbody()
   toast('Linha colada (Ctrl+Z para desfazer)','ok')
+}
+
+// Apaga a data da linha (esconde visualmente).
+function clearDate(ri) {
+  const row = rows[ri]; if (!row) return
+  const rk = rowKey(row)
+  clearedDates.add(rk)
+  userPickedDates.delete(rk)
+  const dateCi = COLS.findIndex(c => c.type === 'date')
+  if (dateCi >= 0) {
+    const td = getTd(ri, dateCi)
+    if (td) {
+      td.innerHTML = ''
+      td.appendChild(buildDisp(COLS[dateCi], visibleVal(row, COLS[dateCi])))
+    }
+  }
+  toast('Data apagada (clique para escolher outra)')
 }
 
 // Deleta a linha inteira (do banco se tiver id, e do array local).

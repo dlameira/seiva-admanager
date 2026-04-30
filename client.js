@@ -379,15 +379,21 @@ function dispVal(col, val) {
 }
 
 // Set de rowKeys onde o usuário escolheu uma data manualmente nesta sessão.
-// Usado pra continuar mostrando a data depois de selecionar mesmo sem ISBN/campanha.
 const userPickedDates = new Set()
+// Set de rowKeys onde o usuário "apagou" a data (esconde visualmente).
+// Schema NOT NULL impede null no banco, então é só esconder na UI.
+const clearedDates = new Set()
 
-// Esconde a data quando a campanha e o ISBN ainda não foram preenchidos
-// E o usuário ainda não selecionou nada manualmente E o status é rascunho.
-// O dado continua salvo no banco; só a exibição é suprimida.
+// Lógica de exibição da data:
+//  - Se foi "apagada" (clearedDates) → vazio
+//  - Se foi escolhida manualmente nesta sessão → mostra
+//  - Se status saiu de rascunho → mostra (já está comprometido)
+//  - Se ISBN ou campanha preenchidos → mostra
+//  - Senão → vazio
 function visibleVal(row, col) {
   if (col.type !== 'date') return row[col.key]
   const rk = rowKey(row)
+  if (clearedDates.has(rk)) return ''
   if (userPickedDates.has(rk)) return row[col.key]
   if ((row.status || 'rascunho') !== 'rascunho') return row[col.key]
   if ((row.campaign_name || '').trim() || (row.isbn || '').trim()) return row[col.key]
@@ -541,7 +547,8 @@ function renderDp() {
   }
 
   const today = toISODate(new Date())
-  const selDs = dpRi !== null ? rows[dpRi]?.date : null
+  // Se a linha tem a data "apagada", não destaca data selecionada no picker
+  const selDs = (dpRi !== null && !clearedDates.has(rowKey(rows[dpRi] || {}))) ? rows[dpRi]?.date : null
   const days  = new Date(y, m+1, 0).getDate()
 
   // Datas já ocupadas por qualquer cliente para este newsletter+formato
@@ -575,7 +582,9 @@ function pickDate(ds) {
   const ri = dpRi
   pushUndo(ri, 'date', rows[ri].date || '')
   rows[ri].date = ds
-  userPickedDates.add(rowKey(rows[ri]))
+  const rk = rowKey(rows[ri])
+  userPickedDates.add(rk)
+  clearedDates.delete(rk)
   markDirty(ri)
   hideDp()
   sortAndRebuild()
@@ -922,6 +931,26 @@ function insertRowAt(targetIndex) {
   activateCell(targetIndex, DATE_CI)
 }
 
+// Apaga a data da linha (esconde visualmente). O dado segue no banco
+// porque o schema é NOT NULL, mas a UI mostra vazio. Quando o usuário
+// escolher uma nova data via picker, sai automaticamente do "limpo".
+function clearDate(ri) {
+  const row = rows[ri]; if (!row) return
+  const rk = rowKey(row)
+  clearedDates.add(rk)
+  userPickedDates.delete(rk)
+  // Re-renderiza só a célula de data
+  const dateCi = COLS.findIndex(c => c.type === 'date')
+  if (dateCi >= 0) {
+    const td = getTd(ri, dateCi)
+    if (td) {
+      td.innerHTML = ''
+      td.appendChild(buildDisp(COLS[dateCi], visibleVal(row, COLS[dateCi])))
+    }
+  }
+  toast('Data apagada (clique para escolher outra)')
+}
+
 // Deleta a linha inteira (do banco se tiver id, e do array local).
 // Pode ser desfeito com Ctrl+Z (recria via createBooking se necess\u00e1rio).
 async function deleteRow(ri) {
@@ -967,6 +996,7 @@ function showContextMenu(x, y, ri) {
     { label: 'Inserir linha abaixo', action: () => insertRowBelow(ri) },
     { label: '——', sep: true },
     { label: 'Copiar linha', action: () => copyRow(ri) },
+    { label: 'Apagar data', action: () => clearDate(ri) },
     { label: 'Limpar informações', action: () => clearRow(ri) },
     { label: '——', sep: true },
     { label: 'Deletar linha', action: () => deleteRow(ri), danger: true },
