@@ -458,8 +458,47 @@ function buildDisp(col, val) {
 function rowKey(row) { return String(row.id) }
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
+// Ordem canônica dos slots dentro da mesma semana
+const SLOT_ORDER = {
+  'aurora_destaque': 0,
+  'indice_destaque': 1,
+  'aurora_corpo':    2,
+  'indice_corpo':    3,
+}
+
+function mondayOf(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr + 'T12:00:00')
+  if (isNaN(d.getTime())) return ''
+  const dow = d.getDay()
+  const offset = dow === 0 ? -6 : 1 - dow
+  d.setDate(d.getDate() + offset)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
+// Ordena por: cliente (alfabético) → semana → slot canônico
+// (Aurora Destaque → Índice Destaque → Aurora Corpo)
 function sortAndRebuild() {
-  // Auto-sort por data foi desativado a pedido — mantém ordem de inserção/ID.
+  rows.sort((a, b) => {
+    const cn = (a._client_name || '').localeCompare(b._client_name || '')
+    if (cn !== 0) return cn
+    const wa = mondayOf(a.date)
+    const wb = mondayOf(b.date)
+    if (wa !== wb) {
+      if (!wa) return 1
+      if (!wb) return -1
+      return wa.localeCompare(wb)
+    }
+    const ka = `${a.newsletter}_${a.format}`
+    const kb = `${b.newsletter}_${b.format}`
+    const oa = SLOT_ORDER[ka] ?? 99
+    const ob = SLOT_ORDER[kb] ?? 99
+    if (oa !== ob) return oa - ob
+    return String(a.id || a._tid || '').localeCompare(String(b.id || b._tid || ''))
+  })
   buildTbody()
 }
 
@@ -874,9 +913,13 @@ function insertRowAt(targetIndex, sourceRi) {
   dirty.add(rowKey(row))
   pushUndoInsert(targetIndex)
   updateSaveBtn()
-  buildTbody()
-  getTr(targetIndex)?.scrollIntoView({ block: 'nearest' })
-  activateCell(targetIndex, DATE_CI)
+  sortAndRebuild()
+  // Reaponta pro novo índice da linha após o sort
+  const newRi = rows.findIndex(r => rowKey(r) === rowKey(row))
+  if (newRi >= 0) {
+    getTr(newRi)?.scrollIntoView({ block: 'nearest' })
+    activateCell(newRi, DATE_CI)
+  }
 }
 function insertRowAbove(ri) { insertRowAt(ri, ri) }
 function insertRowBelow(ri) { insertRowAt(ri + 1, ri) }
