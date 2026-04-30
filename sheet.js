@@ -134,9 +134,13 @@ document.addEventListener('keydown', e => {
 })
 
 // ── Undo ────────────────────────────────────────────────────────────────────
-// Tipos: { type:'field', rowId, key, oldVal } e { type:'delete', row, position }
+// Tipos: 'field', 'insert', 'delete'
 function pushUndo(ri, key, oldVal) {
   undoStack.push({ type: 'field', rowId: rowKey(rows[ri]), key, oldVal })
+  if (undoStack.length > 100) undoStack.shift()
+}
+function pushUndoInsert(ri) {
+  undoStack.push({ type: 'insert', rowId: rowKey(rows[ri]) })
   if (undoStack.length > 100) undoStack.shift()
 }
 function pushUndoDelete(row, position) {
@@ -147,6 +151,17 @@ function pushUndoDelete(row, position) {
 function applyUndo() {
   if (!undoStack.length) { toast('Nada para desfazer'); return }
   const entry = undoStack.pop()
+
+  if (entry.type === 'insert') {
+    const ri = rows.findIndex(r => rowKey(r) === entry.rowId)
+    if (ri < 0) { toast('Linha não encontrada','err'); return }
+    rows.splice(ri, 1)
+    dirty.delete(entry.rowId)
+    updateSaveBtn()
+    buildTbody()
+    toast('Inserção desfeita')
+    return
+  }
 
   if (entry.type === 'delete') {
     const row = entry.row
@@ -314,6 +329,9 @@ function showContextMenu(x, y, ri) {
   menu.style.left = `${x}px`
   menu.style.top  = `${y}px`
   const items = [
+    { label: 'Inserir linha acima', action: () => insertRowAbove(ri) },
+    { label: 'Inserir linha abaixo', action: () => insertRowBelow(ri) },
+    { label: '——', sep: true },
     { label: 'Copiar linha', action: () => copyRow(ri) },
     { label: 'Apagar data', action: () => clearDate(ri) },
     { label: 'Limpar informações', action: () => clearRow(ri) },
@@ -812,6 +830,32 @@ function pasteRow(ri) {
   buildTbody()
   toast('Linha colada (Ctrl+Z para desfazer)','ok')
 }
+
+// Insere uma linha vazia em posição específica (acima ou abaixo da ri).
+// Copia client_id e _client_name da linha de origem (admin geralmente
+// quer adicionar outro spot pro mesmo cliente).
+function insertRowAt(targetIndex, sourceRi) {
+  if (active) closeCell(active.ri, active.ci)
+  hideDp(); hideTextPopup()
+  const src = rows[sourceRi] || {}
+  const row = {
+    _tid: `new-${Date.now()}`,
+    client_id: src.client_id,
+    _client_name: src._client_name || '',
+    date:'', newsletter:'aurora', format:'destaque', status:'rascunho',
+    campaign_name:'', authorship:'', isbn:'', suggested_text:'',
+    extra_info:'', promotional_period:'', cover_link:'', redirect_link:'',
+  }
+  rows.splice(targetIndex, 0, row)
+  dirty.add(rowKey(row))
+  pushUndoInsert(targetIndex)
+  updateSaveBtn()
+  buildTbody()
+  getTr(targetIndex)?.scrollIntoView({ block: 'nearest' })
+  activateCell(targetIndex, DATE_CI)
+}
+function insertRowAbove(ri) { insertRowAt(ri, ri) }
+function insertRowBelow(ri) { insertRowAt(ri + 1, ri) }
 
 // Apaga a data da linha (esconde visualmente).
 function clearDate(ri) {
