@@ -21,6 +21,7 @@ const COLS = [
   { key: 'campaign_name',      label: 'Nome da Campanha',   w: 220, type: 'text' },
   { key: 'authorship',         label: 'Autoria',            w: 158, type: 'text' },
   { key: 'suggested_text',     label: 'Texto',              w: 160, type: 'longtext' },
+  { key: 'campaign',           label: 'Infos Extras',       w: 160, type: 'longtext' },
   { key: 'extra_info',         label: 'Cupom',              w: 160, type: 'longtext' },
   { key: 'promotional_period', label: 'Período Promo',      w: 138, type: 'text' },
   { key: 'cover_link',         label: 'Imagem',             w: 190, type: 'link' },
@@ -959,6 +960,7 @@ async function saveAll() {
       date: row.date, newsletter: row.newsletter, format: row.format,
       campaign_name: row.campaign_name||'', authorship: row.authorship||'',
       isbn: row.isbn||'', suggested_text: row.suggested_text||'-',
+      campaign: row.campaign||'',
       extra_info: row.extra_info||'', promotional_period: row.promotional_period||'',
       cover_link: row.cover_link||'', redirect_link: row.redirect_link||'',
     }
@@ -988,7 +990,7 @@ function addRow() {
     _tid: `new-${newCnt}`, client_id: clientId,
     date:'', newsletter:'aurora', format:'destaque', status:'rascunho',
     campaign_name:'', authorship:'', isbn:'', suggested_text:'',
-    extra_info:'', promotional_period:'', cover_link:'', redirect_link:'',
+    campaign:'', extra_info:'', promotional_period:'', cover_link:'', redirect_link:'',
   }
   rows.push(row)
   dirty.add(rowKey(row))
@@ -1011,7 +1013,7 @@ function insertRowAt(targetIndex) {
     _tid: `new-${newCnt}`, client_id: clientId, _origIdx: _origIdxCounter++,
     date:'', newsletter: 'aurora', format: 'destaque', status:'rascunho',
     campaign_name:'', authorship:'', isbn:'', suggested_text:'',
-    extra_info:'', promotional_period:'', cover_link:'', redirect_link:'',
+    campaign:'', extra_info:'', promotional_period:'', cover_link:'', redirect_link:'',
   }
   rows.splice(targetIndex, 0, row)
   dirty.add(rowKey(row))
@@ -1117,7 +1119,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') hideContextM
 window.addEventListener('scroll', () => hideContextMenu(), true)
 
 // Campos de conteúdo que podem ser copiados/limpos
-const CONTENT_FIELDS = ['campaign_name','authorship','isbn','suggested_text','extra_info','promotional_period','cover_link','redirect_link']
+const CONTENT_FIELDS = ['campaign_name','authorship','isbn','suggested_text','campaign','extra_info','promotional_period','cover_link','redirect_link']
 
 // Copia os campos da linha para a área interna (usar Ctrl+V para colar)
 function copyRow(ri) {
@@ -1154,7 +1156,7 @@ function clearRow(ri) {
   if (tpRi === ri) hideTextPopup()
 
   // Salva snapshot no undo para poder recuperar
-  const fields = ['campaign_name','authorship','isbn','suggested_text','extra_info','promotional_period','cover_link','redirect_link']
+  const fields = ['campaign_name','authorship','isbn','suggested_text','campaign','extra_info','promotional_period','cover_link','redirect_link']
   for (const f of fields) {
     if (row[f]) pushUndo(ri, f, row[f])
     row[f] = ''

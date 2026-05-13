@@ -21,6 +21,7 @@ const COLS = [
   { key: 'campaign_name',   label: 'Nome da Campanha',   w: 220, type: 'text' },
   { key: 'authorship',      label: 'Autoria',            w: 158, type: 'text' },
   { key: 'suggested_text',  label: 'Texto',              w: 160, type: 'longtext' },
+  { key: 'campaign',        label: 'Infos Extras',       w: 160, type: 'longtext' },
   { key: 'extra_info',      label: 'Cupom',              w: 160, type: 'longtext' },
   { key: 'promotional_period', label: 'Período Promo',   w: 138, type: 'text' },
   { key: 'cover_link',      label: 'Imagem',             w: 190, type: 'link' },
@@ -858,6 +859,7 @@ async function saveAll() {
       status: row.status,
       campaign_name: row.campaign_name||'', authorship: row.authorship||'',
       isbn: row.isbn||'', suggested_text: row.suggested_text||'',
+      campaign: row.campaign||'',
       extra_info: row.extra_info||'', promotional_period: row.promotional_period||'',
       cover_link: row.cover_link||'', redirect_link: row.redirect_link||'',
     }
@@ -873,7 +875,7 @@ async function saveAll() {
 }
 
 // Campos de conteúdo que podem ser copiados/limpos
-const CONTENT_FIELDS = ['campaign_name','authorship','isbn','suggested_text','extra_info','promotional_period','cover_link','redirect_link']
+const CONTENT_FIELDS = ['campaign_name','authorship','isbn','suggested_text','campaign','extra_info','promotional_period','cover_link','redirect_link']
 
 function copyRow(ri) {
   const row = rows[ri]; if (!row) return
@@ -912,7 +914,7 @@ function insertRowAt(targetIndex, sourceRi) {
     _origIdx: _origIdxCounter++,
     date:'', newsletter:'aurora', format:'destaque', status:'rascunho',
     campaign_name:'', authorship:'', isbn:'', suggested_text:'',
-    extra_info:'', promotional_period:'', cover_link:'', redirect_link:'',
+    campaign:'', extra_info:'', promotional_period:'', cover_link:'', redirect_link:'',
   }
   rows.splice(targetIndex, 0, row)
   dirty.add(rowKey(row))
@@ -973,7 +975,7 @@ function clearRow(ri) {
   if (dpRi === ri) hideDp()
   if (tpRi === ri) hideTextPopup()
 
-  const fields = ['campaign_name','authorship','isbn','suggested_text','extra_info','promotional_period','cover_link','redirect_link']
+  const fields = ['campaign_name','authorship','isbn','suggested_text','campaign','extra_info','promotional_period','cover_link','redirect_link']
   for (const f of fields) {
     if (row[f]) pushUndo(ri, f, row[f])
     row[f] = ''
