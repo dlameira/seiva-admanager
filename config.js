@@ -113,9 +113,8 @@ export function getQuotaBreakdown(clientId, newsletter, format, quotas, bookings
     b.client_id === clientId && b.newsletter === newsletter && b.format === format
   )
   const veiculated = ofSlot.filter(b => b.status === 'veiculado').length
-  const programmed = ofSlot.filter(b => ['pendente','aprovado'].includes(b.status)).length
-  const remaining  = Math.max(0, total - veiculated - programmed)
-  return { total, veiculated, programmed, remaining }
+  const remaining  = Math.max(0, total - veiculated)
+  return { total, veiculated, remaining }
 }
 
 export function clientHasQuota(clientId, newsletter, format, quotas, bookings, targetDate = null) {

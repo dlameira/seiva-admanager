@@ -89,8 +89,8 @@ function openCotas() {
   let anyShown = false
   for (const [nl, fmt, label] of slots) {
     const b = getQuotaBreakdown(clientId, nl, fmt, allQuotas, rows)
-    // Esconde slots sem cota contratada E sem nenhum booking
-    if (b.total === 0 && b.veiculated === 0 && b.programmed === 0) continue
+    // Esconde slots sem cota contratada E sem nenhum veiculado
+    if (b.total === 0 && b.veiculated === 0) continue
     anyShown = true
     const tr = document.createElement('tr')
     tr.style.borderBottom = '1px solid var(--border)'
@@ -98,13 +98,12 @@ function openCotas() {
       <td style="padding:8px 4px;">${label}</td>
       <td style="padding:8px 4px; text-align:center;">${b.total}</td>
       <td style="padding:8px 4px; text-align:center; color:#15803d;">${b.veiculated}</td>
-      <td style="padding:8px 4px; text-align:center; color:#b45309;">${b.programmed}</td>
       <td style="padding:8px 4px; text-align:center; font-weight:600;">${b.remaining}</td>
     `
     $cotasBody.appendChild(tr)
   }
   if (!anyShown) {
-    $cotasBody.innerHTML = '<tr><td colspan="5" style="padding:14px; text-align:center; color:var(--text-muted);">Nenhuma cota cadastrada.</td></tr>'
+    $cotasBody.innerHTML = '<tr><td colspan="4" style="padding:14px; text-align:center; color:var(--text-muted);">Nenhuma cota cadastrada.</td></tr>'
   }
   $cotasOverlay.style.display = 'block'
   $cotasPopup.style.display = 'block'
