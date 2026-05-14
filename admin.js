@@ -100,7 +100,8 @@ function clientName(clientId) {
 }
 
 function usedSlots(clientId) {
-  return allBookings.filter(b => b.client_id === clientId && b.status !== 'rejeitado').length
+  // Não conta rascunhos (placeholders do setup-agenda)
+  return allBookings.filter(b => b.client_id === clientId && ['pendente','aprovado','veiculado'].includes(b.status)).length
 }
 
 // ─── CLIENTS ──────────────────────────────────────────────────────────────────
@@ -233,9 +234,12 @@ function renderQuotas(clientId) {
   const periodLabels = { semanal: '/semana', mensal: '/mês', livre: 'livre' }
 
   tbody.innerHTML = quotas.map(q => {
+    // Utilizados = pendente + aprovado + veiculado (não conta rascunho)
+    // Rascunhos são placeholders criados pelo setup-agenda; só consomem cota
+    // quando o cliente efetivamente preenche e submete.
     const used = allBookings.filter(b =>
       b.client_id === clientId &&
-      b.status !== 'rejeitado' &&
+      ['pendente','aprovado','veiculado'].includes(b.status) &&
       (q.newsletter === b.newsletter || q.newsletter === 'ambas') &&
       (q.format === b.format || q.format === 'ambos')
     ).length
